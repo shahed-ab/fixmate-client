@@ -77,6 +77,27 @@ const statusConfig: Record<
     border: "border-emerald-200",
     dot: "bg-emerald-500",
   },
+  customer: {
+    label: "Customer",
+    bg: "bg-teal-50",
+    text: "text-teal-700",
+    border: "border-teal-200",
+    dot: "bg-teal-500",
+  },
+  technician: {
+    label: "Technician",
+    bg: "bg-sky-50",
+    text: "text-sky-700",
+    border: "border-sky-200",
+    dot: "bg-sky-500",
+  },
+  admin: {
+    label: "Admin",
+    bg: "bg-purple-50",
+    text: "text-purple-700",
+    border: "border-purple-200",
+    dot: "bg-purple-500",
+  },
 };
 
 export function StatusBadge({ status, className }: StatusBadgeProps) {
