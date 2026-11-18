@@ -6,7 +6,7 @@ import { PaymentBadge } from "@/components/PaymentBadge";
 
 export default function Home() {
   return (
-    <main className="flex-1 py-16">
+    <div className="flex-1 py-16">
       <Container className="space-y-8 text-center sm:text-left">
         <Logo />
         <div className="space-y-2">
@@ -33,6 +33,6 @@ export default function Home() {
           <PaymentBadge status="unpaid" />
         </div>
       </Container>
-    </main>
+    </div>
   );
 }

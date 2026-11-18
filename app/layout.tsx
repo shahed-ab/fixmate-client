@@ -2,6 +2,8 @@ import type { Metadata } from "next";
 import { Inter } from "next/font/google";
 import { Toaster } from "sonner";
 import { MockSessionProvider } from "@/lib/mock-session";
+import { Navbar } from "@/components/Navbar";
+import { Footer } from "@/components/Footer";
 import "./globals.css";
 
 const inter = Inter({
@@ -24,11 +26,14 @@ export default function RootLayout({
     <html lang="en" className={`${inter.variable} antialiased`}>
       <body className="min-h-screen bg-background text-foreground flex flex-col font-sans">
         <MockSessionProvider>
-          {children}
+          <Navbar />
+          <main className="flex-1 flex flex-col">{children}</main>
+          <Footer />
         </MockSessionProvider>
         <Toaster position="top-right" richColors closeButton />
       </body>
     </html>
   );
 }
+
 
