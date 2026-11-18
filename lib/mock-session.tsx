@@ -128,6 +128,17 @@ export function MockSessionProvider({ children }: { children: ReactNode }) {
       setIsLoading(true);
       await new Promise((res) => setTimeout(res, 250));
 
+      const rawUsers = typeof window !== 'undefined' ? localStorage.getItem('fixmate_mock_users') : null;
+      const usersList: User[] = rawUsers ? JSON.parse(rawUsers) : [...mockUsers];
+      const exists = usersList.some(
+        (u) => u.email.toLowerCase() === userData.email.toLowerCase()
+      );
+
+      if (exists) {
+        setIsLoading(false);
+        throw new Error('This email is already registered. Please sign in or use another email.');
+      }
+
       const newUser: User = {
         _id: `usr_${Date.now()}`,
         name: userData.name,
@@ -136,9 +147,11 @@ export function MockSessionProvider({ children }: { children: ReactNode }) {
         createdAt: new Date().toISOString(),
       };
 
+      usersList.push(newUser);
       setCurrentUser(newUser);
       setCurrentRole(userData.role);
       if (typeof window !== 'undefined') {
+        localStorage.setItem('fixmate_mock_users', JSON.stringify(usersList));
         localStorage.setItem(MOCK_STORAGE_KEY, newUser.email);
       }
       setIsLoading(false);
