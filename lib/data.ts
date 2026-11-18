@@ -122,7 +122,7 @@ export async function getServices(
     mode,
     sort = 'newest',
     page = 1,
-    limit = 9,
+    limit = 8,
   } = params;
 
   // Filter only approved & available for public browsing
