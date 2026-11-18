@@ -1,0 +1,845 @@
+import {
+  User,
+  Service,
+  Booking,
+  Payment,
+  UserRole,
+  BookingStatus,
+  ServiceFilterParams,
+  PaginatedResponse,
+  CustomerStats,
+  TechnicianStats,
+  AdminStats,
+  PublicStats,
+} from './types';
+import {
+  mockUsers,
+  mockServices,
+  mockBookings,
+  mockPayments,
+} from './mock-data';
+
+const DELAY_MS = 300;
+
+const delay = (ms = DELAY_MS) =>
+  new Promise((resolve) => setTimeout(resolve, ms));
+
+const STORAGE_KEYS = {
+  USERS: 'fixmate_mock_users',
+  SERVICES: 'fixmate_mock_services',
+  BOOKINGS: 'fixmate_mock_bookings',
+  PAYMENTS: 'fixmate_mock_payments',
+};
+
+// In-memory cache
+let inMemoryUsers: User[] = [...mockUsers];
+let inMemoryServices: Service[] = [...mockServices];
+let inMemoryBookings: Booking[] = [...mockBookings];
+let inMemoryPayments: Payment[] = [...mockPayments];
+
+// Helper to check client environment
+const isClient = typeof window !== 'undefined';
+
+function initStore() {
+  if (!isClient) return;
+
+  try {
+    const storedUsers = localStorage.getItem(STORAGE_KEYS.USERS);
+    if (storedUsers) {
+      inMemoryUsers = JSON.parse(storedUsers);
+    } else {
+      localStorage.setItem(STORAGE_KEYS.USERS, JSON.stringify(mockUsers));
+    }
+
+    const storedServices = localStorage.getItem(STORAGE_KEYS.SERVICES);
+    if (storedServices) {
+      inMemoryServices = JSON.parse(storedServices);
+    } else {
+      localStorage.setItem(STORAGE_KEYS.SERVICES, JSON.stringify(mockServices));
+    }
+
+    const storedBookings = localStorage.getItem(STORAGE_KEYS.BOOKINGS);
+    if (storedBookings) {
+      inMemoryBookings = JSON.parse(storedBookings);
+    } else {
+      localStorage.setItem(STORAGE_KEYS.BOOKINGS, JSON.stringify(mockBookings));
+    }
+
+    const storedPayments = localStorage.getItem(STORAGE_KEYS.PAYMENTS);
+    if (storedPayments) {
+      inMemoryPayments = JSON.parse(storedPayments);
+    } else {
+      localStorage.setItem(STORAGE_KEYS.PAYMENTS, JSON.stringify(mockPayments));
+    }
+  } catch (err) {
+    console.warn('FixMate localStorage init warning:', err);
+  }
+}
+
+// Trigger initial load on module evaluation
+if (isClient) {
+  initStore();
+}
+
+function persistStore() {
+  if (!isClient) return;
+  try {
+    localStorage.setItem(STORAGE_KEYS.USERS, JSON.stringify(inMemoryUsers));
+    localStorage.setItem(STORAGE_KEYS.SERVICES, JSON.stringify(inMemoryServices));
+    localStorage.setItem(STORAGE_KEYS.BOOKINGS, JSON.stringify(inMemoryBookings));
+    localStorage.setItem(STORAGE_KEYS.PAYMENTS, JSON.stringify(inMemoryPayments));
+  } catch (err) {
+    console.warn('FixMate localStorage persist warning:', err);
+  }
+}
+
+/* =========================================================
+   PUBLIC / GENERAL SERVICE FUNCTIONS
+   ========================================================= */
+
+/**
+ * Get 6 latest approved and available services for the home page.
+ */
+export async function getFeaturedServices(): Promise<Service[]> {
+  await delay();
+  return inMemoryServices
+    .filter((s) => s.approvalStatus === 'approved' && s.isAvailable)
+    .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
+    .slice(0, 6);
+}
+
+/**
+ * Browse services with search, category, mode, sort, and pagination.
+ */
+export async function getServices(
+  params: ServiceFilterParams = {}
+): Promise<PaginatedResponse<Service>> {
+  await delay();
+
+  const {
+    q,
+    category,
+    mode,
+    sort = 'newest',
+    page = 1,
+    limit = 9,
+  } = params;
+
+  // Filter only approved & available for public browsing
+  let filtered = inMemoryServices.filter(
+    (s) => s.approvalStatus === 'approved' && s.isAvailable
+  );
+
+  // Search query (title, description, category, technicianName, serviceArea)
+  if (q && q.trim()) {
+    const query = q.toLowerCase().trim();
+    filtered = filtered.filter(
+      (s) =>
+        s.title.toLowerCase().includes(query) ||
+        s.description.toLowerCase().includes(query) ||
+        s.category.toLowerCase().includes(query) ||
+        s.technicianName.toLowerCase().includes(query) ||
+        s.serviceArea.toLowerCase().includes(query)
+    );
+  }
+
+  // Category filter
+  if (category && category.toLowerCase() !== 'all') {
+    filtered = filtered.filter(
+      (s) => s.category.toLowerCase() === category.toLowerCase()
+    );
+  }
+
+  // Service mode filter
+  if (mode && mode.toLowerCase() !== 'all') {
+    filtered = filtered.filter(
+      (s) => s.serviceMode.toLowerCase() === mode.toLowerCase()
+    );
+  }
+
+  // Sorting
+  filtered = [...filtered].sort((a, b) => {
+    switch (sort) {
+      case 'price-asc':
+        return a.basePrice - b.basePrice;
+      case 'price-desc':
+        return b.basePrice - a.basePrice;
+      case 'oldest':
+        return new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime();
+      case 'newest':
+      default:
+        return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
+    }
+  });
+
+  const total = filtered.length;
+  const pages = Math.max(1, Math.ceil(total / limit));
+  const currentPage = Math.max(1, Math.min(page, pages));
+  const items = filtered.slice((currentPage - 1) * limit, currentPage * limit);
+
+  return {
+    items,
+    total,
+    page: currentPage,
+    pages,
+  };
+}
+
+/**
+ * Get single service by ID
+ */
+export async function getServiceById(id: string): Promise<Service | null> {
+  await delay();
+  const service = inMemoryServices.find((s) => s._id === id);
+  return service ? { ...service } : null;
+}
+
+/* =========================================================
+   CUSTOMER BOOKING FUNCTIONS
+   ========================================================= */
+
+/**
+ * Get all bookings of a specific customer (or all if email omitted)
+ */
+export async function getMyBookings(customerEmail?: string): Promise<Booking[]> {
+  await delay();
+  if (!customerEmail) {
+    return [...inMemoryBookings].sort(
+      (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
+    );
+  }
+  return inMemoryBookings
+    .filter((b) => b.customerEmail.toLowerCase() === customerEmail.toLowerCase())
+    .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+}
+
+/**
+ * Create a new repair booking with duplicate-active and own-service checks.
+ */
+export async function createBooking(
+  data: Omit<Booking, '_id' | 'createdAt' | 'status' | 'finalAmount' | 'paymentStatus'>
+): Promise<Booking> {
+  await delay();
+
+  // 1. Own-service check: Technician cannot book their own service
+  if (
+    data.technicianEmail &&
+    data.customerEmail &&
+    data.technicianEmail.toLowerCase() === data.customerEmail.toLowerCase()
+  ) {
+    throw new Error('Technicians cannot request a repair for their own service.');
+  }
+
+  // 2. Duplicate active request check
+  // An active request has status: requested, accepted, or in-progress
+  const activeStatuses: BookingStatus[] = ['requested', 'accepted', 'in-progress'];
+  const hasActiveRequest = inMemoryBookings.some(
+    (b) =>
+      b.serviceId === data.serviceId &&
+      b.customerEmail.toLowerCase() === data.customerEmail.toLowerCase() &&
+      activeStatuses.includes(b.status)
+  );
+
+  if (hasActiveRequest) {
+    throw new Error('You already have an active request for this service.');
+  }
+
+  const newBooking: Booking = {
+    ...data,
+    _id: `bkg_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`,
+    status: 'requested',
+    finalAmount: data.basePrice,
+    paymentStatus: 'unpaid',
+    createdAt: new Date().toISOString(),
+  };
+
+  inMemoryBookings.unshift(newBooking);
+  persistStore();
+
+  return { ...newBooking };
+}
+
+/**
+ * Cancel own repair request (allowed strictly when status === 'requested')
+ */
+export async function cancelBooking(
+  id: string,
+  customerEmail?: string
+): Promise<Booking> {
+  await delay();
+
+  const bookingIndex = inMemoryBookings.findIndex((b) => b._id === id);
+  if (bookingIndex === -1) {
+    throw new Error('Booking not found.');
+  }
+
+  const booking = inMemoryBookings[bookingIndex];
+
+  if (customerEmail && booking.customerEmail.toLowerCase() !== customerEmail.toLowerCase()) {
+    throw new Error('You can only cancel your own bookings.');
+  }
+
+  if (booking.status !== 'requested') {
+    throw new Error('Only bookings with status "requested" can be cancelled.');
+  }
+
+  const updatedBooking: Booking = {
+    ...booking,
+    status: 'cancelled',
+  };
+
+  inMemoryBookings[bookingIndex] = updatedBooking;
+  persistStore();
+
+  return { ...updatedBooking };
+}
+
+/* =========================================================
+   TECHNICIAN SERVICE & REQUEST FUNCTIONS
+   ========================================================= */
+
+/**
+ * Get services belonging to a technician
+ */
+export async function getTechnicianServices(
+  technicianEmail?: string
+): Promise<Service[]> {
+  await delay();
+  if (!technicianEmail) {
+    return [...inMemoryServices];
+  }
+  return inMemoryServices
+    .filter((s) => s.technicianEmail.toLowerCase() === technicianEmail.toLowerCase())
+    .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+}
+
+/**
+ * Create service: sets approvalStatus to 'pending' and isAvailable to true
+ */
+export async function createService(
+  serviceData: Omit<Service, '_id' | 'createdAt' | 'approvalStatus' | 'isAvailable'>
+): Promise<Service> {
+  await delay();
+
+  const newService: Service = {
+    ...serviceData,
+    _id: `srv_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`,
+    approvalStatus: 'pending',
+    isAvailable: true,
+    createdAt: new Date().toISOString(),
+  };
+
+  inMemoryServices.unshift(newService);
+  persistStore();
+
+  return { ...newService };
+}
+
+/**
+ * Update own service (resets approvalStatus to 'pending')
+ */
+export async function updateService(
+  id: string,
+  updates: Partial<Service>
+): Promise<Service> {
+  await delay();
+
+  const index = inMemoryServices.findIndex((s) => s._id === id);
+  if (index === -1) {
+    throw new Error('Service not found.');
+  }
+
+  const updated: Service = {
+    ...inMemoryServices[index],
+    ...updates,
+    approvalStatus: 'pending', // Reverts to pending on edit per requirements
+  };
+
+  inMemoryServices[index] = updated;
+  persistStore();
+
+  return { ...updated };
+}
+
+/**
+ * Delete service
+ */
+export async function deleteService(id: string): Promise<boolean> {
+  await delay();
+
+  const index = inMemoryServices.findIndex((s) => s._id === id);
+  if (index === -1) {
+    throw new Error('Service not found.');
+  }
+
+  inMemoryServices.splice(index, 1);
+  persistStore();
+
+  return true;
+}
+
+/**
+ * Toggle availability of a service (must NOT reset approvalStatus)
+ */
+export async function toggleAvailability(id: string): Promise<Service> {
+  await delay();
+
+  const index = inMemoryServices.findIndex((s) => s._id === id);
+  if (index === -1) {
+    throw new Error('Service not found.');
+  }
+
+  const existing = inMemoryServices[index];
+  const updated: Service = {
+    ...existing,
+    isAvailable: !existing.isAvailable,
+  };
+
+  inMemoryServices[index] = updated;
+  persistStore();
+
+  return { ...updated };
+}
+
+/**
+ * Get bookings assigned to a technician
+ */
+export async function getTechnicianBookings(
+  technicianEmail?: string
+): Promise<Booking[]> {
+  await delay();
+  if (!technicianEmail) {
+    return [...inMemoryBookings].sort(
+      (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
+    );
+  }
+  return inMemoryBookings
+    .filter((b) => b.technicianEmail.toLowerCase() === technicianEmail.toLowerCase())
+    .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+}
+
+/**
+ * Status Pipeline transitions map:
+ * - requested -> accepted | rejected: technician
+ * - requested -> cancelled: customer
+ * - accepted -> in-progress: technician
+ * - in-progress -> completed: technician (finalAmount > 0 required)
+ * - rejected / cancelled / completed: final states (completed only changes paymentStatus)
+ */
+export async function updateBookingStatus(
+  id: string,
+  nextStatus: BookingStatus,
+  options?: {
+    finalAmount?: number;
+    technicianEmail?: string;
+    customerEmail?: string;
+  }
+): Promise<Booking> {
+  await delay();
+
+  const index = inMemoryBookings.findIndex((b) => b._id === id);
+  if (index === -1) {
+    throw new Error('Booking not found.');
+  }
+
+  const booking = inMemoryBookings[index];
+  const current = booking.status;
+
+  // Strict Pipeline Transitions Validation
+  const validTransitions: Record<BookingStatus, BookingStatus[]> = {
+    requested: ['accepted', 'rejected', 'cancelled'],
+    accepted: ['in-progress'],
+    'in-progress': ['completed'],
+    completed: [],
+    rejected: [],
+    cancelled: [],
+  };
+
+  if (!validTransitions[current]?.includes(nextStatus)) {
+    throw new Error(
+      `Invalid status transition from "${current}" to "${nextStatus}".`
+    );
+  }
+
+  // Authorization checks
+  if (nextStatus === 'cancelled') {
+    if (
+      options?.customerEmail &&
+      booking.customerEmail.toLowerCase() !== options.customerEmail.toLowerCase()
+    ) {
+      throw new Error('Only the customer who requested this booking can cancel it.');
+    }
+  } else {
+    // Technician actions: accepted, rejected, in-progress, completed
+    if (
+      options?.technicianEmail &&
+      booking.technicianEmail.toLowerCase() !== options.technicianEmail.toLowerCase()
+    ) {
+      throw new Error('Only the assigned technician can update this job.');
+    }
+  }
+
+  // Completion requirement: finalAmount > 0
+  let finalAmount = booking.finalAmount;
+  if (nextStatus === 'completed') {
+    if (options?.finalAmount !== undefined) {
+      if (typeof options.finalAmount !== 'number' || options.finalAmount <= 0) {
+        throw new Error('Final amount must be a positive number.');
+      }
+      finalAmount = options.finalAmount;
+    } else if (finalAmount <= 0) {
+      finalAmount = booking.basePrice;
+    }
+  }
+
+  const updated: Booking = {
+    ...booking,
+    status: nextStatus,
+    finalAmount,
+  };
+
+  inMemoryBookings[index] = updated;
+  persistStore();
+
+  return { ...updated };
+}
+
+/* =========================================================
+   ADMIN FUNCTIONS
+   ========================================================= */
+
+/**
+ * Get all registered platform users
+ */
+export async function getAdminUsers(): Promise<User[]> {
+  await delay();
+  return [...inMemoryUsers].sort(
+    (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
+  );
+}
+
+/**
+ * Change user role (forbidden to change own role)
+ */
+export async function changeUserRole(
+  userId: string,
+  newRole: UserRole,
+  currentUserId?: string
+): Promise<User> {
+  await delay();
+
+  if (currentUserId && userId === currentUserId) {
+    throw new Error('You cannot change your own administrative role.');
+  }
+
+  const index = inMemoryUsers.findIndex((u) => u._id === userId);
+  if (index === -1) {
+    throw new Error('User not found.');
+  }
+
+  const updated: User = {
+    ...inMemoryUsers[index],
+    role: newRole,
+  };
+
+  inMemoryUsers[index] = updated;
+  persistStore();
+
+  return { ...updated };
+}
+
+/**
+ * Get services for admin moderation
+ */
+export async function getAdminServices(
+  filter: 'all' | 'pending' | 'approved' | 'rejected' = 'all'
+): Promise<Service[]> {
+  await delay();
+
+  let list = [...inMemoryServices];
+  if (filter !== 'all') {
+    list = list.filter((s) => s.approvalStatus === filter);
+  }
+
+  // Pending first, then newest
+  return list.sort((a, b) => {
+    if (a.approvalStatus === 'pending' && b.approvalStatus !== 'pending') return -1;
+    if (a.approvalStatus !== 'pending' && b.approvalStatus === 'pending') return 1;
+    return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
+  });
+}
+
+/**
+ * Moderate service: set approval status
+ */
+export async function setApproval(
+  serviceId: string,
+  status: 'approved' | 'rejected'
+): Promise<Service> {
+  await delay();
+
+  const index = inMemoryServices.findIndex((s) => s._id === serviceId);
+  if (index === -1) {
+    throw new Error('Service not found.');
+  }
+
+  const updated: Service = {
+    ...inMemoryServices[index],
+    approvalStatus: status,
+  };
+
+  inMemoryServices[index] = updated;
+  persistStore();
+
+  return { ...updated };
+}
+
+/**
+ * Get all platform bookings for admin monitoring
+ */
+export async function getAdminBookings(statusFilter?: string): Promise<Booking[]> {
+  await delay();
+
+  let list = [...inMemoryBookings];
+  if (statusFilter && statusFilter !== 'all') {
+    list = list.filter((b) => b.status === statusFilter);
+  }
+
+  return list.sort(
+    (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
+  );
+}
+
+/* =========================================================
+   PAYMENT FUNCTIONS
+   ========================================================= */
+
+/**
+ * Get payments (for customer history or admin all transactions)
+ */
+export async function getPayments(customerEmail?: string): Promise<Payment[]> {
+  await delay();
+
+  if (!customerEmail) {
+    return [...inMemoryPayments].sort(
+      (a, b) => new Date(b.paidAt).getTime() - new Date(a.paidAt).getTime()
+    );
+  }
+
+  return inMemoryPayments
+    .filter((p) => p.customerEmail.toLowerCase() === customerEmail.toLowerCase())
+    .sort((a, b) => new Date(b.paidAt).getTime() - new Date(a.paidAt).getTime());
+}
+
+/**
+ * Mock Pay Now for Phase 1 frontend testing
+ * (replaced by Stripe Checkout in Phase 3)
+ */
+export async function mockPayBooking(bookingId: string): Promise<Payment> {
+  await delay();
+
+  const index = inMemoryBookings.findIndex((b) => b._id === bookingId);
+  if (index === -1) {
+    throw new Error('Booking not found.');
+  }
+
+  const booking = inMemoryBookings[index];
+  if (booking.status !== 'completed') {
+    throw new Error('Payment can only be processed for completed repairs.');
+  }
+
+  if (booking.paymentStatus === 'paid') {
+    throw new Error('This booking is already paid.');
+  }
+
+  // Update booking paymentStatus
+  booking.paymentStatus = 'paid';
+  inMemoryBookings[index] = { ...booking };
+
+  const newPayment: Payment = {
+    _id: `pmt_${Date.now()}`,
+    bookingId: booking._id,
+    serviceTitle: booking.serviceTitle,
+    customerName: booking.customerName,
+    customerEmail: booking.customerEmail,
+    technicianName: booking.technicianName,
+    technicianEmail: booking.technicianEmail,
+    amount: booking.finalAmount,
+    currency: 'usd',
+    transactionId: `txn_mock_${Math.random().toString(36).substring(2, 11)}`,
+    stripeSessionId: `cs_mock_${Math.random().toString(36).substring(2, 16)}`,
+    paymentStatus: 'paid',
+    paidAt: new Date().toISOString(),
+  };
+
+  inMemoryPayments.unshift(newPayment);
+  persistStore();
+
+  return { ...newPayment };
+}
+
+/* =========================================================
+   USER PROFILE
+   ========================================================= */
+
+export async function updateUserProfile(
+  email: string,
+  updates: Partial<User>
+): Promise<User> {
+  await delay();
+
+  const index = inMemoryUsers.findIndex(
+    (u) => u.email.toLowerCase() === email.toLowerCase()
+  );
+  if (index === -1) {
+    throw new Error('User not found.');
+  }
+
+  // Email and role are immutable via profile update
+  const sanitized = { ...updates };
+  delete sanitized.email;
+  delete sanitized.role;
+  delete sanitized._id;
+
+  const updated: User = {
+    ...inMemoryUsers[index],
+    ...sanitized,
+  };
+
+  inMemoryUsers[index] = updated;
+  persistStore();
+
+  return { ...updated };
+}
+
+/* =========================================================
+   STATS FUNCTIONS
+   ========================================================= */
+
+export async function getStats(
+  role: 'customer' | 'technician' | 'admin' | 'public',
+  email?: string
+): Promise<CustomerStats | TechnicianStats | AdminStats | PublicStats> {
+  await delay();
+
+  if (role === 'customer') {
+    const userBookings = email
+      ? inMemoryBookings.filter(
+          (b) => b.customerEmail.toLowerCase() === email.toLowerCase()
+        )
+      : inMemoryBookings;
+
+    const totalRequests = userBookings.length;
+    const activeJobs = userBookings.filter((b) =>
+      ['requested', 'accepted', 'in-progress'].includes(b.status)
+    ).length;
+    const completedJobs = userBookings.filter((b) => b.status === 'completed').length;
+
+    const userPayments = email
+      ? inMemoryPayments.filter(
+          (p) => p.customerEmail.toLowerCase() === email.toLowerCase()
+        )
+      : inMemoryPayments;
+
+    const totalSpent = userPayments.reduce((sum, p) => sum + p.amount, 0);
+
+    const chartData = [
+      { month: 'Oct', requests: 1, spent: 75 },
+      { month: 'Nov', requests: 2, spent: 155 },
+      { month: 'Dec', requests: 1, spent: 90 },
+      { month: 'Jan', requests: 3, spent: 220 },
+      { month: 'Feb', requests: Math.max(1, totalRequests), spent: Math.max(50, totalSpent) },
+    ];
+
+    return {
+      totalRequests,
+      activeJobs,
+      completedJobs,
+      totalSpent,
+      chartData,
+    } as CustomerStats;
+  }
+
+  if (role === 'technician') {
+    const techServices = email
+      ? inMemoryServices.filter(
+          (s) => s.technicianEmail.toLowerCase() === email.toLowerCase()
+        )
+      : inMemoryServices;
+
+    const techBookings = email
+      ? inMemoryBookings.filter(
+          (b) => b.technicianEmail.toLowerCase() === email.toLowerCase()
+        )
+      : inMemoryBookings;
+
+    const totalServices = techServices.length;
+    const approvedServices = techServices.filter(
+      (s) => s.approvalStatus === 'approved'
+    ).length;
+    const pendingRequests = techBookings.filter(
+      (b) => b.status === 'requested'
+    ).length;
+    const completedJobs = techBookings.filter(
+      (b) => b.status === 'completed'
+    ).length;
+    const totalEarnings = techBookings
+      .filter((b) => b.status === 'completed' && b.paymentStatus === 'paid')
+      .reduce((sum, b) => sum + b.finalAmount, 0);
+
+    const chartData = [
+      { month: 'Oct', jobs: 3, earnings: 340 },
+      { month: 'Nov', jobs: 5, earnings: 580 },
+      { month: 'Dec', jobs: 4, earnings: 490 },
+      { month: 'Jan', jobs: 6, earnings: 720 },
+      { month: 'Feb', jobs: Math.max(2, completedJobs), earnings: Math.max(195, totalEarnings) },
+    ];
+
+    return {
+      totalServices,
+      approvedServices,
+      pendingRequests,
+      completedJobs,
+      totalEarnings,
+      chartData,
+    } as TechnicianStats;
+  }
+
+  if (role === 'admin') {
+    const totalUsers = inMemoryUsers.length;
+    const totalTechnicians = inMemoryUsers.filter((u) => u.role === 'technician').length;
+    const totalCustomers = inMemoryUsers.filter((u) => u.role === 'customer').length;
+    const pendingServices = inMemoryServices.filter(
+      (s) => s.approvalStatus === 'pending'
+    ).length;
+    const totalBookings = inMemoryBookings.length;
+    const totalRevenue = inMemoryPayments.reduce((sum, p) => sum + p.amount, 0);
+
+    const chartData = [
+      { month: 'Oct', revenue: 1450, bookings: 12 },
+      { month: 'Nov', revenue: 2180, bookings: 18 },
+      { month: 'Dec', revenue: 1950, bookings: 16 },
+      { month: 'Jan', revenue: 2890, bookings: 24 },
+      { month: 'Feb', revenue: Math.max(1200, totalRevenue), bookings: Math.max(9, totalBookings) },
+    ];
+
+    return {
+      totalUsers,
+      totalTechnicians,
+      totalCustomers,
+      pendingServices,
+      totalBookings,
+      totalRevenue,
+      chartData,
+    } as AdminStats;
+  }
+
+  // public stats
+  return {
+    totalServices: inMemoryServices.filter((s) => s.approvalStatus === 'approved').length,
+    completedRepairs: 480 + inMemoryBookings.filter((b) => b.status === 'completed').length,
+    expertTechnicians: 35 + inMemoryUsers.filter((u) => u.role === 'technician').length,
+    happyCustomers: 98,
+    satisfactionRate: 99.2,
+  } as PublicStats;
+}
