@@ -1,0 +1,115 @@
+@import "tailwindcss";
+@import "tw-animate-css";
+
+@custom-variant dark (&:is(.dark *));
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --font-sans: var(--font-sans);
+  --font-mono: var(--font-geist-mono);
+  --font-heading: var(--font-sans);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-primary-hover: var(--primary-hover);
+  --color-primary-active: var(--primary-active);
+  --color-primary-muted: var(--primary-muted);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-destructive-foreground: var(--destructive-foreground);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-surface-sand: var(--surface-sand);
+  --color-footer-dark: var(--footer-dark);
+  --color-footer-foreground: var(--footer-foreground);
+
+  --radius-sm: calc(var(--radius) * 0.6);
+  --radius-md: calc(var(--radius) * 0.8);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) * 1.33);
+  --radius-2xl: calc(var(--radius) * 1.77);
+  --radius-3xl: calc(var(--radius) * 2.2);
+  --radius-full: 9999px;
+}
+
+:root {
+  --background: #F7F5F0;
+  --foreground: #181818;
+  --card: #FFFFFF;
+  --card-foreground: #181818;
+  --popover: #FFFFFF;
+  --popover-foreground: #181818;
+  --primary: #0F766E;
+  --primary-foreground: #FFFFFF;
+  --primary-hover: #0D6D65;
+  --primary-active: #08544E;
+  --primary-muted: #F0FDFA;
+  --secondary: #F0FDFA;
+  --secondary-foreground: #0F766E;
+  --muted: #EDEAE2;
+  --muted-foreground: #6B7280;
+  --accent: #F0FDFA;
+  --accent-foreground: #0F766E;
+  --destructive: #DC2626;
+  --destructive-foreground: #FFFFFF;
+  --border: #E5E2DA;
+  --input: #E5E2DA;
+  --ring: #0F766E;
+  --radius: 0.625rem;
+
+  --surface-sand: #F7F5F0;
+  --footer-dark: #1E201E;
+  --footer-foreground: #F3F4F6;
+
+  --chart-1: #0F766E;
+  --chart-2: #2563EB;
+  --chart-3: #D97706;
+  --chart-4: #059669;
+  --chart-5: #6B7280;
+}
+
+.dark {
+  --background: #121212;
+  --foreground: #F3F4F6;
+  --card: #1E201E;
+  --card-foreground: #F3F4F6;
+  --popover: #1E201E;
+  --popover-foreground: #F3F4F6;
+  --primary: #14B8A6;
+  --primary-foreground: #0F172A;
+  --primary-hover: #0F766E;
+  --primary-active: #0D6D65;
+  --primary-muted: #132E2B;
+  --secondary: #1F2937;
+  --secondary-foreground: #F3F4F6;
+  --muted: #27272A;
+  --muted-foreground: #9CA3AF;
+  --accent: #1F2937;
+  --accent-foreground: #F3F4F6;
+  --destructive: #EF4444;
+  --destructive-foreground: #FFFFFF;
+  --border: #2E322E;
+  --input: #2E322E;
+  --ring: #14B8A6;
+
+  --surface-sand: #181A18;
+  --footer-dark: #141614;
+  --footer-foreground: #F3F4F6;
+}
+
+body {
+  background-color: var(--background);
+  color: var(--foreground);
+  font-family: var(--font-sans), system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+  min-height: 100vh;
+}
