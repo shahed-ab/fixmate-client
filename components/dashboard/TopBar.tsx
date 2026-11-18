@@ -98,7 +98,7 @@ export function TopBar({ onToggleMobileSidebar }: TopBarProps) {
       <div className="flex items-center gap-3">
         <button
           onClick={onToggleMobileSidebar}
-          className="lg:hidden rounded-xl p-2 text-muted-foreground hover:bg-muted hover:text-foreground transition"
+          className="lg:hidden rounded-xl p-2 text-muted-foreground hover:bg-muted hover:text-foreground transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
           aria-label="Open sidebar menu"
         >
           <Menu className="h-5 w-5" />
@@ -119,7 +119,7 @@ export function TopBar({ onToggleMobileSidebar }: TopBarProps) {
         {/* Quick Link to Public Home */}
         <Link
           href="/"
-          className="hidden sm:inline-flex items-center gap-1.5 rounded-xl border border-border bg-background px-3 py-1.5 text-xs font-semibold text-muted-foreground hover:border-primary/40 hover:text-primary transition"
+          className="hidden sm:inline-flex items-center gap-1.5 rounded-xl border border-border bg-background px-3 py-1.5 text-xs font-semibold text-muted-foreground hover:border-primary/40 hover:text-primary transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
         >
           <Home className="h-3.5 w-3.5" />
           <span>Home</span>
@@ -129,7 +129,7 @@ export function TopBar({ onToggleMobileSidebar }: TopBarProps) {
         <div className="relative" ref={dropdownRef}>
           <button
             onClick={() => setDropdownOpen((prev) => !prev)}
-            className="flex items-center gap-2.5 rounded-xl p-1.5 pr-2.5 hover:bg-muted transition duration-150 border border-transparent hover:border-border"
+            className="flex items-center gap-2.5 rounded-xl p-1.5 pr-2.5 hover:bg-muted transition duration-150 border border-transparent hover:border-border focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
             aria-expanded={dropdownOpen}
             aria-haspopup="true"
           >

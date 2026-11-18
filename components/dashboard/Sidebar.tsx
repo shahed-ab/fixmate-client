@@ -153,7 +153,7 @@ export function Sidebar({
                 onClick={onCloseMobile}
                 title={isCollapsed ? item.label : undefined}
                 className={cn(
-                  'group flex items-center rounded-xl font-medium text-sm transition-all duration-150',
+                  'group flex items-center rounded-xl font-medium text-sm transition-all duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2',
                   isCollapsed ? 'h-11 w-11 justify-center mx-auto' : 'h-11 px-3.5 gap-3.5',
                   isActive
                     ? 'bg-primary text-primary-foreground shadow-xs font-semibold'
@@ -181,7 +181,7 @@ export function Sidebar({
           href="/"
           title={isCollapsed ? 'Back to Home' : undefined}
           className={cn(
-            'flex items-center rounded-xl text-sm font-medium text-muted-foreground hover:bg-muted hover:text-foreground transition-all duration-150',
+            'flex items-center rounded-xl text-sm font-medium text-muted-foreground hover:bg-muted hover:text-foreground transition-all duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2',
             isCollapsed ? 'h-10 w-10 justify-center mx-auto' : 'h-10 px-3 gap-3'
           )}
         >
@@ -194,7 +194,7 @@ export function Sidebar({
           onClick={handleSignOut}
           title={isCollapsed ? 'Sign Out' : undefined}
           className={cn(
-            'flex w-full items-center rounded-xl text-sm font-medium text-rose-600 hover:bg-rose-50 hover:text-rose-700 transition-all duration-150',
+            'flex w-full items-center rounded-xl text-sm font-medium text-rose-600 hover:bg-rose-50 hover:text-rose-700 transition-all duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-rose-500 focus-visible:ring-offset-2',
             isCollapsed ? 'h-10 w-10 justify-center mx-auto' : 'h-10 px-3 gap-3'
           )}
         >
@@ -207,7 +207,7 @@ export function Sidebar({
           onClick={onToggleCollapse}
           title={isCollapsed ? 'Expand sidebar' : 'Collapse sidebar'}
           className={cn(
-            'hidden lg:flex w-full items-center justify-center rounded-xl text-xs font-medium text-muted-foreground hover:bg-muted hover:text-foreground transition-all duration-150 mt-1',
+            'hidden lg:flex w-full items-center justify-center rounded-xl text-xs font-medium text-muted-foreground hover:bg-muted hover:text-foreground transition-all duration-150 mt-1 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2',
             isCollapsed ? 'h-9 w-9 mx-auto' : 'h-9 px-3 gap-2'
           )}
         >
