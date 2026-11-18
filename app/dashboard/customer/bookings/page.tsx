@@ -2,6 +2,7 @@
 
 import React, { useState, useEffect, useMemo } from 'react';
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 import {
   CalendarClock,
   Search,
@@ -25,6 +26,7 @@ import { toast } from 'sonner';
 type StatusFilter = 'all' | BookingStatus;
 
 export default function MyBookingsPage() {
+  const router = useRouter();
   const { user } = useMockSession();
   const [bookings, setBookings] = useState<Booking[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -77,11 +79,15 @@ export default function MyBookingsPage() {
     try {
       setPayingBookingId(booking._id);
       /* replaced by Stripe in Phase 3 */
-      await mockPayBooking(booking._id);
+      const payment = await mockPayBooking(booking._id);
       toast.success(
         `Payment of $${booking.finalAmount || booking.basePrice} processed successfully!`
       );
-      await fetchBookings();
+      router.push(
+        `/payment/success?amount=${payment.amount}&txn=${payment.transactionId}&service=${encodeURIComponent(
+          payment.serviceTitle
+        )}&booking_id=${payment.bookingId}`
+      );
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : 'Payment failed.';
       toast.error(msg);
