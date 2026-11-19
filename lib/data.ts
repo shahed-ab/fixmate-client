@@ -93,6 +93,10 @@ function persistStore() {
   }
 }
 
+const API_URL = (
+  process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000'
+).replace(/\/+$/, '');
+
 /* =========================================================
    PUBLIC / GENERAL SERVICE FUNCTIONS
    ========================================================= */
@@ -101,11 +105,13 @@ function persistStore() {
  * Get 6 latest approved and available services for the home page.
  */
 export async function getFeaturedServices(): Promise<Service[]> {
-  await delay();
-  return inMemoryServices
-    .filter((s) => s.approvalStatus === 'approved' && s.isAvailable)
-    .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
-    .slice(0, 6);
+  const res = await fetch(`${API_URL}/api/services/home`, {
+    cache: 'no-store',
+  });
+  if (!res.ok) {
+    throw new Error(`Failed to fetch featured services: ${res.statusText}`);
+  }
+  return res.json();
 }
 
 /**
@@ -114,84 +120,74 @@ export async function getFeaturedServices(): Promise<Service[]> {
 export async function getServices(
   params: ServiceFilterParams = {}
 ): Promise<PaginatedResponse<Service>> {
-  await delay();
+  const searchParams = new URLSearchParams();
 
-  const {
-    q,
-    category,
-    mode,
-    sort = 'newest',
-    page = 1,
-    limit = 8,
-  } = params;
-
-  // Filter only approved & available for public browsing
-  let filtered = inMemoryServices.filter(
-    (s) => s.approvalStatus === 'approved' && s.isAvailable
-  );
-
-  // Search query (title, description, category, technicianName, serviceArea)
-  if (q && q.trim()) {
-    const query = q.toLowerCase().trim();
-    filtered = filtered.filter(
-      (s) =>
-        s.title.toLowerCase().includes(query) ||
-        s.description.toLowerCase().includes(query) ||
-        s.category.toLowerCase().includes(query) ||
-        s.technicianName.toLowerCase().includes(query) ||
-        s.serviceArea.toLowerCase().includes(query)
-    );
+  if (params.q && params.q.trim()) {
+    searchParams.set('q', params.q.trim());
   }
 
-  // Category filter
-  if (category && category.toLowerCase() !== 'all') {
-    filtered = filtered.filter(
-      (s) => s.category.toLowerCase() === category.toLowerCase()
-    );
+  if (
+    params.category &&
+    params.category.trim() &&
+    params.category.toLowerCase() !== 'all' &&
+    params.category.toLowerCase() !== 'all categories'
+  ) {
+    searchParams.set('category', params.category.trim());
   }
 
-  // Service mode filter
-  if (mode && mode.toLowerCase() !== 'all') {
-    filtered = filtered.filter(
-      (s) => s.serviceMode.toLowerCase() === mode.toLowerCase()
-    );
+  if (
+    params.mode &&
+    params.mode.trim() &&
+    params.mode.toLowerCase() !== 'all'
+  ) {
+    searchParams.set('mode', params.mode.trim());
   }
 
-  // Sorting
-  filtered = [...filtered].sort((a, b) => {
-    switch (sort) {
-      case 'price-asc':
-        return a.basePrice - b.basePrice;
-      case 'price-desc':
-        return b.basePrice - a.basePrice;
-      case 'oldest':
-        return new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime();
-      case 'newest':
-      default:
-        return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
-    }
+  if (params.sort) {
+    searchParams.set('sort', params.sort);
+  }
+
+  if (params.page !== undefined) {
+    searchParams.set('page', params.page.toString());
+  }
+
+  if (params.limit !== undefined) {
+    searchParams.set('limit', params.limit.toString());
+  }
+
+  const queryString = searchParams.toString();
+  const url = `${API_URL}/api/services${queryString ? `?${queryString}` : ''}`;
+
+  const res = await fetch(url, {
+    cache: 'no-store',
   });
 
-  const total = filtered.length;
-  const pages = Math.max(1, Math.ceil(total / limit));
-  const currentPage = Math.max(1, Math.min(page, pages));
-  const items = filtered.slice((currentPage - 1) * limit, currentPage * limit);
+  if (!res.ok) {
+    throw new Error(`Failed to fetch services: ${res.statusText}`);
+  }
 
-  return {
-    items,
-    total,
-    page: currentPage,
-    pages,
-  };
+  return res.json();
 }
 
 /**
  * Get single service by ID
  */
 export async function getServiceById(id: string): Promise<Service | null> {
-  await delay();
-  const service = inMemoryServices.find((s) => s._id === id);
-  return service ? { ...service } : null;
+  if (!id) return null;
+
+  const res = await fetch(`${API_URL}/api/services/${id}`, {
+    cache: 'no-store',
+  });
+
+  if (res.status === 404) {
+    return null;
+  }
+
+  if (!res.ok) {
+    throw new Error(`Failed to fetch service: ${res.statusText}`);
+  }
+
+  return res.json();
 }
 
 /* =========================================================
