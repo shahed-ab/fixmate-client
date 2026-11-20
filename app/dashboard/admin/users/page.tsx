@@ -12,7 +12,7 @@ import {
   Mail,
   Phone,
 } from 'lucide-react';
-import { useMockSession } from '@/lib/mock-session';
+import { useSession } from '@/lib/auth-client';
 import { getAdminUsers, changeUserRole } from '@/lib/data';
 import { User, UserRole } from '@/lib/types';
 import { DataTable, Column } from '@/components/DataTable';
@@ -24,7 +24,8 @@ import { toast } from 'sonner';
 type RoleFilter = 'all' | 'customer' | 'technician' | 'admin';
 
 export default function AdminUsersPage() {
-  const { user: currentUser } = useMockSession();
+  const { data: session } = useSession();
+  const currentUser = session?.user;
   const [users, setUsers] = useState<User[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
@@ -89,8 +90,9 @@ export default function AdminUsersPage() {
 
     if (
       currentUser &&
-      (targetUser.email.toLowerCase() === currentUser.email.toLowerCase() ||
-        targetUser._id === currentUser._id)
+      (targetUser.email.toLowerCase() === currentUser.email?.toLowerCase() ||
+        targetUser._id === currentUser.id ||
+        targetUser._id === (currentUser as any)._id)
     ) {
       toast.error('You cannot change your own administrative role.');
       return;
@@ -110,7 +112,7 @@ export default function AdminUsersPage() {
 
     try {
       setIsUpdatingRole(true);
-      await changeUserRole(targetUser._id, newRole, currentUser?._id);
+      await changeUserRole(targetUser._id, newRole, currentUser?.id || (currentUser as any)?._id);
       toast.success(
         `Updated role for ${targetUser.name} to ${newRole.charAt(0).toUpperCase() + newRole.slice(1)}.`
       );

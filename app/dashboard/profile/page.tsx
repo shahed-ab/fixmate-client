@@ -15,14 +15,20 @@ import {
   Save,
   RotateCcw,
 } from 'lucide-react';
-import { useMockSession } from '@/lib/mock-session';
+import { useRouter } from 'next/navigation';
+import { useSession, refreshAuthSession } from '@/lib/auth-client';
+import { updateUserProfile } from '@/lib/data';
+import { UserRole } from '@/lib/types';
 import { uploadImage, validateImageFile } from '@/lib/uploadImage';
 import { Button } from '@/components/Button';
 import { StatusBadge } from '@/components/StatusBadge';
 import { toast } from 'sonner';
 
 export default function ProfilePage() {
-  const { user, role, isLoading: isSessionLoading, updateUser } = useMockSession();
+  const router = useRouter();
+  const { data: session, isPending: isSessionLoading, refetch } = useSession();
+  const user = session?.user;
+  const role = ((user as { role?: string } | undefined)?.role || 'customer') as UserRole;
 
   // Form State
   const [name, setName] = useState('');
@@ -42,9 +48,9 @@ export default function ProfilePage() {
   useEffect(() => {
     if (user) {
       setName(user.name || '');
-      setPhone(user.phone || '');
-      setArea(user.area || '');
-      setBio(user.bio || '');
+      setPhone((user as { phone?: string }).phone || '');
+      setArea((user as { area?: string }).area || '');
+      setBio((user as { bio?: string }).bio || '');
       setImage(user.image || '');
       setImagePreview(user.image || '');
     }
@@ -96,9 +102,9 @@ export default function ProfilePage() {
   const handleReset = () => {
     if (user) {
       setName(user.name || '');
-      setPhone(user.phone || '');
-      setArea(user.area || '');
-      setBio(user.bio || '');
+      setPhone((user as { phone?: string }).phone || '');
+      setArea((user as { area?: string }).area || '');
+      setBio((user as { bio?: string }).bio || '');
       setImage(user.image || '');
       setImagePreview(user.image || '');
       toast.info('Changes discarded.');
@@ -113,16 +119,28 @@ export default function ProfilePage() {
       return;
     }
 
+    if (!user?.email) {
+      toast.error('No authenticated user session found.');
+      return;
+    }
+
     try {
       setIsSaving(true);
 
-      await updateUser({
+      await updateUserProfile(user.email, {
         name: name.trim(),
         phone: phone.trim(),
         area: area.trim(),
         bio: bio.trim(),
         image: image.trim(),
       });
+
+      // Refresh Better Auth session bypassing cookie cache so navbar and top bar update
+      await refreshAuthSession();
+      if (typeof refetch === 'function') {
+        await refetch({ query: { disableCookieCache: true } });
+      }
+      router.refresh();
 
       toast.success('Profile updated successfully! Changes synced across platform.');
     } catch (err: unknown) {

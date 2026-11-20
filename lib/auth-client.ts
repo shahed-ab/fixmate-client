@@ -22,6 +22,23 @@ export const {
 } = authClient;
 
 /**
+ * Refreshes the Better Auth session bypassing cookie cache.
+ * Queries /api/auth/get-session?disableCookieCache=true so the server loads
+ * the updated user record directly from MongoDB and updates the session cookies.
+ */
+export async function refreshAuthSession() {
+  try {
+    const res = await authClient.getSession({
+      query: { disableCookieCache: true },
+    });
+    return res?.data || null;
+  } catch (err) {
+    console.warn("Failed to refresh auth session with disableCookieCache:", err);
+    return null;
+  }
+}
+
+/**
  * Retrieves a cryptographically signed JWT token usable by the Express backend.
  *
  * Method Used:

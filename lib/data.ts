@@ -800,9 +800,37 @@ export async function updateBookingStatus(
    ========================================================= */
 
 /**
- * Get all registered platform users
+ * Get all registered platform users.
+ * Calls Express GET /api/admin/users with Authorization: Bearer <getAuthToken()>.
  */
 export async function getAdminUsers(): Promise<User[]> {
+  const token = await getAuthToken();
+
+  if (token) {
+    const res = await fetch(`${API_URL}/api/admin/users`, {
+      headers: {
+        Authorization: `Bearer ${token}`,
+      },
+      cache: 'no-store',
+    });
+
+    if (res.ok) {
+      const data = await res.json();
+      return (Array.isArray(data) ? data : []).map((u: any) => ({
+        ...u,
+        _id: String(u._id || u.id || ''),
+      }));
+    }
+
+    const errorData = await res.json().catch(() => ({}));
+    const err = new Error(
+      errorData.message || `Failed to fetch users: ${res.statusText}`
+    );
+    (err as unknown as { status: number }).status = res.status;
+    throw err;
+  }
+
+  // Fallback to in-memory if no token
   await delay();
   return [...inMemoryUsers].sort(
     (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
@@ -810,13 +838,44 @@ export async function getAdminUsers(): Promise<User[]> {
 }
 
 /**
- * Change user role (forbidden to change own role)
+ * Change user role (forbidden to change own role).
+ * Calls Express PATCH /api/admin/users/:id/role with Authorization: Bearer <getAuthToken()>.
  */
 export async function changeUserRole(
   userId: string,
   newRole: UserRole,
   currentUserId?: string
 ): Promise<User> {
+  const token = await getAuthToken();
+
+  if (token) {
+    const res = await fetch(`${API_URL}/api/admin/users/${userId}/role`, {
+      method: 'PATCH',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${token}`,
+      },
+      body: JSON.stringify({ role: newRole }),
+    });
+
+    const resData = await res.json().catch(() => ({}));
+
+    if (!res.ok) {
+      const err = new Error(
+        resData.message || `Failed to update user role: ${res.statusText}`
+      );
+      (err as unknown as { status: number }).status = res.status;
+      throw err;
+    }
+
+    const user = resData.user || resData;
+    return {
+      ...user,
+      _id: String(user._id || user.id || userId),
+    };
+  }
+
+  // Fallback to in-memory if no token
   await delay();
 
   if (currentUserId && userId === currentUserId) {
@@ -840,11 +899,40 @@ export async function changeUserRole(
 }
 
 /**
- * Get services for admin moderation
+ * Get services for admin moderation.
+ * Calls Express GET /api/admin/services?status= with Authorization: Bearer <getAuthToken()>.
  */
 export async function getAdminServices(
   filter: 'all' | 'pending' | 'approved' | 'rejected' = 'all'
 ): Promise<Service[]> {
+  const token = await getAuthToken();
+
+  if (token) {
+    const query = filter && filter !== 'all' ? `?status=${encodeURIComponent(filter)}` : '';
+    const res = await fetch(`${API_URL}/api/admin/services${query}`, {
+      headers: {
+        Authorization: `Bearer ${token}`,
+      },
+      cache: 'no-store',
+    });
+
+    if (res.ok) {
+      const data = await res.json();
+      return (Array.isArray(data) ? data : []).map((s: any) => ({
+        ...s,
+        _id: String(s._id || s.id || ''),
+      }));
+    }
+
+    const errorData = await res.json().catch(() => ({}));
+    const err = new Error(
+      errorData.message || `Failed to fetch services for moderation: ${res.statusText}`
+    );
+    (err as unknown as { status: number }).status = res.status;
+    throw err;
+  }
+
+  // Fallback to in-memory if no token
   await delay();
 
   let list = [...inMemoryServices];
@@ -861,12 +949,43 @@ export async function getAdminServices(
 }
 
 /**
- * Moderate service: set approval status
+ * Moderate service: set approval status.
+ * Calls Express PATCH /api/admin/services/:id/approval with Authorization: Bearer <getAuthToken()>.
  */
 export async function setApproval(
   serviceId: string,
   status: 'approved' | 'rejected'
 ): Promise<Service> {
+  const token = await getAuthToken();
+
+  if (token) {
+    const res = await fetch(`${API_URL}/api/admin/services/${serviceId}/approval`, {
+      method: 'PATCH',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${token}`,
+      },
+      body: JSON.stringify({ approvalStatus: status }),
+    });
+
+    const resData = await res.json().catch(() => ({}));
+
+    if (!res.ok) {
+      const err = new Error(
+        resData.message || `Failed to update service approval status: ${res.statusText}`
+      );
+      (err as unknown as { status: number }).status = res.status;
+      throw err;
+    }
+
+    const service = resData.service || resData;
+    return {
+      ...service,
+      _id: String(service._id || service.id || serviceId),
+    };
+  }
+
+  // Fallback to in-memory if no token
   await delay();
 
   const index = inMemoryServices.findIndex((s) => s._id === serviceId);
@@ -886,9 +1005,41 @@ export async function setApproval(
 }
 
 /**
- * Get all platform bookings for admin monitoring
+ * Get all platform bookings for admin monitoring.
+ * Calls Express GET /api/admin/bookings?status= with Authorization: Bearer <getAuthToken()>.
  */
 export async function getAdminBookings(statusFilter?: string): Promise<Booking[]> {
+  const token = await getAuthToken();
+
+  if (token) {
+    const query =
+      statusFilter && statusFilter !== 'all'
+        ? `?status=${encodeURIComponent(statusFilter)}`
+        : '';
+    const res = await fetch(`${API_URL}/api/admin/bookings${query}`, {
+      headers: {
+        Authorization: `Bearer ${token}`,
+      },
+      cache: 'no-store',
+    });
+
+    if (res.ok) {
+      const data = await res.json();
+      return (Array.isArray(data) ? data : []).map((b: any) => ({
+        ...b,
+        _id: String(b._id || b.id || ''),
+      }));
+    }
+
+    const errorData = await res.json().catch(() => ({}));
+    const err = new Error(
+      errorData.message || `Failed to fetch platform bookings: ${res.statusText}`
+    );
+    (err as unknown as { status: number }).status = res.status;
+    throw err;
+  }
+
+  // Fallback to in-memory if no token
   await delay();
 
   let list = [...inMemoryBookings];
@@ -901,6 +1052,54 @@ export async function getAdminBookings(statusFilter?: string): Promise<Booking[]
   );
 }
 
+/**
+ * Get all transactions with platform totalRevenue for Admin monitoring.
+ * Calls Express GET /api/admin/payments with Authorization: Bearer <getAuthToken()>.
+ */
+export async function getAdminPayments(): Promise<{ payments: Payment[]; totalRevenue: number }> {
+  const token = await getAuthToken();
+
+  if (token) {
+    const res = await fetch(`${API_URL}/api/admin/payments`, {
+      headers: {
+        Authorization: `Bearer ${token}`,
+      },
+      cache: 'no-store',
+    });
+
+    if (res.ok) {
+      const data = await res.json();
+      const payments = (Array.isArray(data?.payments) ? data.payments : []).map(
+        (p: any) => ({
+          ...p,
+          _id: String(p._id || p.id || ''),
+        })
+      );
+      const totalRevenue =
+        typeof data?.totalRevenue === 'number'
+          ? data.totalRevenue
+          : payments.reduce((sum: number, p: Payment) => sum + (Number(p.amount) || 0), 0);
+
+      return { payments, totalRevenue };
+    }
+
+    const errorData = await res.json().catch(() => ({}));
+    const err = new Error(
+      errorData.message || `Failed to fetch admin transactions: ${res.statusText}`
+    );
+    (err as unknown as { status: number }).status = res.status;
+    throw err;
+  }
+
+  // Fallback to in-memory if no token
+  await delay();
+  const payments = [...inMemoryPayments].sort(
+    (a, b) => new Date(b.paidAt).getTime() - new Date(a.paidAt).getTime()
+  );
+  const totalRevenue = payments.reduce((sum, p) => sum + (p.amount || 0), 0);
+  return { payments, totalRevenue };
+}
+
 /* =========================================================
    PAYMENT FUNCTIONS
    ========================================================= */
@@ -908,6 +1107,7 @@ export async function getAdminBookings(statusFilter?: string): Promise<Booking[]
 /**
  * Get payments (for customer history or admin all transactions).
  * Calls Express GET /api/payments/my with Authorization: Bearer <getAuthToken()>.
+ * If called by admin (or /api/payments/my returns 403), seamlessly queries /api/admin/payments.
  */
 export async function getPayments(customerEmail?: string): Promise<Payment[]> {
   const token = await getAuthToken();
@@ -925,13 +1125,25 @@ export async function getPayments(customerEmail?: string): Promise<Payment[]> {
       return Array.isArray(data) ? data : [];
     }
 
-    const errorData = await res.json().catch(() => ({}));
+    // If 403 Forbidden and no customerEmail specified, user may be Admin viewing transactions
     if (res.status === 403 && !customerEmail) {
-      // In case admin or other caller accesses it before I6
-      return [...inMemoryPayments].sort(
-        (a, b) => new Date(b.paidAt).getTime() - new Date(a.paidAt).getTime()
-      );
+      try {
+        const adminRes = await fetch(`${API_URL}/api/admin/payments`, {
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+          cache: 'no-store',
+        });
+        if (adminRes.ok) {
+          const adminData = await adminRes.json();
+          return Array.isArray(adminData?.payments) ? adminData.payments : [];
+        }
+      } catch {
+        // Fall through to error handling or in-memory
+      }
     }
+
+    const errorData = await res.json().catch(() => ({}));
     const err = new Error(errorData.message || `Failed to fetch payment history: ${res.statusText}`);
     (err as unknown as { status: number }).status = res.status;
     throw err;
@@ -1065,10 +1277,52 @@ export async function mockPayBooking(bookingId: string): Promise<Payment> {
    USER PROFILE
    ========================================================= */
 
+/**
+ * Updates authenticated user profile display data.
+ * Calls Express PATCH /api/users/profile with Authorization: Bearer <getAuthToken()>.
+ * Only name, phone, area, bio, and image are modified. Email and role are immutable.
+ */
 export async function updateUserProfile(
   email: string,
   updates: Partial<User>
 ): Promise<User> {
+  const token = await getAuthToken();
+
+  if (token) {
+    const payload: Record<string, string> = {};
+    if (updates.name !== undefined) payload.name = updates.name.trim();
+    if (updates.phone !== undefined) payload.phone = updates.phone.trim();
+    if (updates.area !== undefined) payload.area = updates.area.trim();
+    if (updates.bio !== undefined) payload.bio = updates.bio.trim();
+    if (updates.image !== undefined) payload.image = updates.image.trim();
+
+    const res = await fetch(`${API_URL}/api/users/profile`, {
+      method: 'PATCH',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${token}`,
+      },
+      body: JSON.stringify(payload),
+    });
+
+    const resData = await res.json().catch(() => ({}));
+
+    if (!res.ok) {
+      const err = new Error(
+        resData.message || `Failed to update profile: ${res.statusText}`
+      );
+      (err as unknown as { status: number }).status = res.status;
+      throw err;
+    }
+
+    const user = resData.user || resData;
+    return {
+      ...user,
+      _id: String(user._id || user.id || ''),
+    };
+  }
+
+  // Fallback to in-memory if no token
   await delay();
 
   const index = inMemoryUsers.findIndex(
@@ -1247,6 +1501,110 @@ export async function getTechnicianStats(
   };
 }
 
+/**
+ * Fetch admin executive metrics and revenue overview.
+ * Calls Express GET /api/admin/stats with Authorization: Bearer <getAuthToken()>.
+ */
+export async function getAdminStats(): Promise<AdminStats> {
+  const token = await getAuthToken();
+
+  if (token) {
+    const res = await fetch(`${API_URL}/api/admin/stats`, {
+      headers: {
+        Authorization: `Bearer ${token}`,
+      },
+      cache: 'no-store',
+    });
+
+    if (res.ok) {
+      const data = await res.json();
+      return {
+        totalUsers: data.totalUsers ?? 0,
+        totalTechnicians: data.totalTechnicians ?? data.technicians ?? 0,
+        totalCustomers: data.totalCustomers ?? data.customers ?? 0,
+        pendingServices: data.pendingServices ?? 0,
+        totalBookings: data.totalBookings ?? 0,
+        totalRevenue: data.totalRevenue ?? 0,
+        chartData: Array.isArray(data.chartData)
+          ? data.chartData
+          : Array.isArray(data.revenueByMonth)
+          ? data.revenueByMonth
+          : [],
+      };
+    }
+
+    const errorData = await res.json().catch(() => ({}));
+    const err = new Error(
+      errorData.message || `Failed to fetch admin stats: ${res.statusText}`
+    );
+    (err as unknown as { status: number }).status = res.status;
+    throw err;
+  }
+
+  // Fallback to in-memory if no token
+  await delay();
+  const totalUsers = inMemoryUsers.length;
+  const totalTechnicians = inMemoryUsers.filter((u) => u.role === 'technician').length;
+  const totalCustomers = inMemoryUsers.filter((u) => u.role === 'customer').length;
+  const pendingServices = inMemoryServices.filter(
+    (s) => s.approvalStatus === 'pending'
+  ).length;
+  const totalBookings = inMemoryBookings.length;
+  const totalRevenue = inMemoryPayments.reduce((sum, p) => sum + p.amount, 0);
+
+  const chartData = [
+    { month: 'Oct', revenue: 1450, bookings: 12 },
+    { month: 'Nov', revenue: 2180, bookings: 18 },
+    { month: 'Dec', revenue: 1950, bookings: 16 },
+    { month: 'Jan', revenue: 2890, bookings: 24 },
+    { month: 'Feb', revenue: Math.max(1200, totalRevenue), bookings: Math.max(9, totalBookings) },
+  ];
+
+  return {
+    totalUsers,
+    totalTechnicians,
+    totalCustomers,
+    pendingServices,
+    totalBookings,
+    totalRevenue,
+    chartData,
+  };
+}
+
+/**
+ * Fetch public platform trust statistics (verified technicians, completed jobs).
+ * Calls Express GET /api/stats.
+ */
+export async function getPublicStats(): Promise<PublicStats> {
+  try {
+    const res = await fetch(`${API_URL}/api/stats`, {
+      cache: 'no-store',
+    });
+
+    if (res.ok) {
+      const data = await res.json();
+      return {
+        totalServices: data.totalServices ?? 0,
+        completedRepairs: data.completedRepairs ?? data.completedJobs ?? 0,
+        expertTechnicians: data.expertTechnicians ?? data.verifiedTechnicians ?? 0,
+        happyCustomers: data.happyCustomers ?? 98,
+        satisfactionRate: data.satisfactionRate ?? 99.2,
+      };
+    }
+  } catch (err) {
+    console.warn('Failed to fetch public platform stats, falling back:', err);
+  }
+
+  // Fallback to in-memory
+  return {
+    totalServices: inMemoryServices.filter((s) => s.approvalStatus === 'approved').length,
+    completedRepairs: 480 + inMemoryBookings.filter((b) => b.status === 'completed').length,
+    expertTechnicians: 35 + inMemoryUsers.filter((u) => u.role === 'technician').length,
+    happyCustomers: 98,
+    satisfactionRate: 99.2,
+  };
+}
+
 export async function getStats(
   role: 'customer' | 'technician' | 'admin' | 'public',
   email?: string
@@ -1259,43 +1617,9 @@ export async function getStats(
     return getTechnicianStats(email);
   }
 
-  await delay();
-
   if (role === 'admin') {
-    const totalUsers = inMemoryUsers.length;
-    const totalTechnicians = inMemoryUsers.filter((u) => u.role === 'technician').length;
-    const totalCustomers = inMemoryUsers.filter((u) => u.role === 'customer').length;
-    const pendingServices = inMemoryServices.filter(
-      (s) => s.approvalStatus === 'pending'
-    ).length;
-    const totalBookings = inMemoryBookings.length;
-    const totalRevenue = inMemoryPayments.reduce((sum, p) => sum + p.amount, 0);
-
-    const chartData = [
-      { month: 'Oct', revenue: 1450, bookings: 12 },
-      { month: 'Nov', revenue: 2180, bookings: 18 },
-      { month: 'Dec', revenue: 1950, bookings: 16 },
-      { month: 'Jan', revenue: 2890, bookings: 24 },
-      { month: 'Feb', revenue: Math.max(1200, totalRevenue), bookings: Math.max(9, totalBookings) },
-    ];
-
-    return {
-      totalUsers,
-      totalTechnicians,
-      totalCustomers,
-      pendingServices,
-      totalBookings,
-      totalRevenue,
-      chartData,
-    } as AdminStats;
+    return getAdminStats();
   }
 
-  // public stats
-  return {
-    totalServices: inMemoryServices.filter((s) => s.approvalStatus === 'approved').length,
-    completedRepairs: 480 + inMemoryBookings.filter((b) => b.status === 'completed').length,
-    expertTechnicians: 35 + inMemoryUsers.filter((u) => u.role === 'technician').length,
-    happyCustomers: 98,
-    satisfactionRate: 99.2,
-  } as PublicStats;
+  return getPublicStats();
 }

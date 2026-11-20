@@ -8,7 +8,7 @@ import {
   User,
   Wrench,
 } from 'lucide-react';
-import { getPayments } from '@/lib/data';
+import { getAdminPayments } from '@/lib/data';
 import { Payment } from '@/lib/types';
 import { DataTable, Column } from '@/components/DataTable';
 import { PaymentBadge } from '@/components/PaymentBadge';
@@ -16,14 +16,16 @@ import { toast } from 'sonner';
 
 export default function AdminTransactionsPage() {
   const [payments, setPayments] = useState<Payment[]>([]);
+  const [apiTotalRevenue, setApiTotalRevenue] = useState<number | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
 
   const fetchPayments = async () => {
     try {
       setIsLoading(true);
-      const data = await getPayments();
-      setPayments(data);
+      const data = await getAdminPayments();
+      setPayments(data.payments);
+      setApiTotalRevenue(data.totalRevenue);
     } catch (err) {
       console.error('Failed to load platform transactions:', err);
       toast.error('Unable to fetch transaction records.');
@@ -55,13 +57,16 @@ export default function AdminTransactionsPage() {
 
   // Aggregate Metrics for Header Banner
   const totalRevenue = useMemo(() => {
-    return payments.reduce((sum, p) => sum + p.amount, 0);
-  }, [payments]);
+    if (apiTotalRevenue !== null && !searchQuery.trim()) {
+      return apiTotalRevenue;
+    }
+    return filteredPayments.reduce((sum, p) => sum + p.amount, 0);
+  }, [filteredPayments, apiTotalRevenue, searchQuery]);
 
   const avgOrderValue = useMemo(() => {
-    if (payments.length === 0) return 0;
-    return totalRevenue / payments.length;
-  }, [payments, totalRevenue]);
+    if (filteredPayments.length === 0) return 0;
+    return totalRevenue / filteredPayments.length;
+  }, [filteredPayments, totalRevenue]);
 
   // Columns definition
   const columns: Column<Payment>[] = [
