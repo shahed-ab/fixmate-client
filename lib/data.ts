@@ -709,6 +709,69 @@ export async function getPayments(customerEmail?: string): Promise<Payment[]> {
 }
 
 /**
+ * Create a Stripe Checkout Session for a completed booking.
+ * Calls Express POST /api/payments/create-checkout-session with Authorization: Bearer <getAuthToken()>.
+ */
+export async function createCheckoutSession(
+  bookingId: string
+): Promise<{ success: boolean; url: string; sessionId?: string }> {
+  const token = await getAuthToken();
+
+  const res = await fetch(`${API_URL}/api/payments/create-checkout-session`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
+    },
+    body: JSON.stringify({ bookingId }),
+  });
+
+  const resData = await res.json().catch(() => ({}));
+
+  if (!res.ok) {
+    const err = new Error(
+      resData.message || `Failed to initiate checkout: ${res.statusText}`
+    );
+    (err as unknown as { status: number }).status = res.status;
+    throw err;
+  }
+
+  return resData;
+}
+
+/**
+ * Verify a Stripe Checkout Session and fulfill payment.
+ * Calls Express GET /api/payments/verify?session_id=... with Authorization: Bearer <getAuthToken()>.
+ */
+export async function verifyPaymentSession(
+  sessionId: string
+): Promise<{ success: boolean; message: string; payment: Payment }> {
+  const token = await getAuthToken();
+
+  const res = await fetch(
+    `${API_URL}/api/payments/verify?session_id=${encodeURIComponent(sessionId)}`,
+    {
+      headers: {
+        ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      },
+      cache: 'no-store',
+    }
+  );
+
+  const resData = await res.json().catch(() => ({}));
+
+  if (!res.ok) {
+    const err = new Error(
+      resData.message || `Failed to verify payment: ${res.statusText}`
+    );
+    (err as unknown as { status: number }).status = res.status;
+    throw err;
+  }
+
+  return resData;
+}
+
+/**
  * Mock Pay Now for Phase 1 frontend testing
  * (replaced by Stripe Checkout in Phase 3)
  */
