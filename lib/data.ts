@@ -12,6 +12,7 @@ import {
   AdminStats,
   PublicStats,
 } from './types';
+import { getAuthToken } from './auth-client';
 import {
   mockUsers,
   mockServices,
@@ -195,9 +196,32 @@ export async function getServiceById(id: string): Promise<Service | null> {
    ========================================================= */
 
 /**
- * Get all bookings of a specific customer (or all if email omitted)
+ * Get all bookings of a specific customer (or all if email omitted).
+ * Calls Express GET /api/bookings/my with Authorization: Bearer <getAuthToken()>.
  */
 export async function getMyBookings(customerEmail?: string): Promise<Booking[]> {
+  const token = await getAuthToken();
+
+  if (token) {
+    const res = await fetch(`${API_URL}/api/bookings/my`, {
+      headers: {
+        Authorization: `Bearer ${token}`,
+      },
+      cache: 'no-store',
+    });
+
+    if (res.ok) {
+      const data = await res.json();
+      return Array.isArray(data) ? data : [];
+    }
+
+    const errorData = await res.json().catch(() => ({}));
+    const err = new Error(errorData.message || `Failed to fetch bookings: ${res.statusText}`);
+    (err as unknown as { status: number }).status = res.status;
+    throw err;
+  }
+
+  // Fallback to in-memory if no token is available
   await delay();
   if (!customerEmail) {
     return [...inMemoryBookings].sort(
@@ -211,57 +235,85 @@ export async function getMyBookings(customerEmail?: string): Promise<Booking[]> 
 
 /**
  * Create a new repair booking with duplicate-active and own-service checks.
+ * Calls Express POST /api/bookings with Authorization: Bearer <getAuthToken()>.
+ * Maps server errors (including 409 duplicate message).
  */
 export async function createBooking(
   data: Omit<Booking, '_id' | 'createdAt' | 'status' | 'finalAmount' | 'paymentStatus'>
 ): Promise<Booking> {
-  await delay();
+  const token = await getAuthToken();
 
-  // 1. Own-service check: Technician cannot book their own service
-  if (
-    data.technicianEmail &&
-    data.customerEmail &&
-    data.technicianEmail.toLowerCase() === data.customerEmail.toLowerCase()
-  ) {
-    throw new Error('Technicians cannot request a repair for their own service.');
+  const res = await fetch(`${API_URL}/api/bookings`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
+    },
+    body: JSON.stringify({
+      serviceId: data.serviceId,
+      customerPhone: data.customerPhone,
+      phone: data.customerPhone,
+      address: data.address,
+      preferredDate: data.preferredDate,
+      problemDescription: data.problemDescription,
+    }),
+  });
+
+  const resData = await res.json().catch(() => ({}));
+
+  if (!res.ok) {
+    const err = new Error(resData.message || `Failed to create booking: ${res.statusText}`);
+    (err as unknown as { status: number }).status = res.status;
+    throw err;
   }
 
-  // 2. Duplicate active request check
-  // An active request has status: requested, accepted, or in-progress
-  const activeStatuses: BookingStatus[] = ['requested', 'accepted', 'in-progress'];
-  const hasActiveRequest = inMemoryBookings.some(
-    (b) =>
-      b.serviceId === data.serviceId &&
-      b.customerEmail.toLowerCase() === data.customerEmail.toLowerCase() &&
-      activeStatuses.includes(b.status)
-  );
-
-  if (hasActiveRequest) {
-    throw new Error('You already have an active request for this service.');
+  const created = resData.booking || resData;
+  if (created) {
+    inMemoryBookings.unshift(created);
+    persistStore();
   }
 
-  const newBooking: Booking = {
-    ...data,
-    _id: `bkg_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`,
-    status: 'requested',
-    finalAmount: data.basePrice,
-    paymentStatus: 'unpaid',
-    createdAt: new Date().toISOString(),
-  };
-
-  inMemoryBookings.unshift(newBooking);
-  persistStore();
-
-  return { ...newBooking };
+  return created;
 }
 
 /**
- * Cancel own repair request (allowed strictly when status === 'requested')
+ * Cancel own repair request (allowed strictly when status === 'requested').
+ * Calls Express PATCH /api/bookings/:id/cancel with Authorization: Bearer <getAuthToken()>.
  */
 export async function cancelBooking(
   id: string,
   customerEmail?: string
 ): Promise<Booking> {
+  const token = await getAuthToken();
+
+  if (token) {
+    const res = await fetch(`${API_URL}/api/bookings/${id}/cancel`, {
+      method: 'PATCH',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${token}`,
+      },
+    });
+
+    const resData = await res.json().catch(() => ({}));
+
+    if (!res.ok) {
+      const err = new Error(resData.message || `Failed to cancel booking: ${res.statusText}`);
+      (err as unknown as { status: number }).status = res.status;
+      throw err;
+    }
+
+    const updated = resData.booking || resData;
+    const idx = inMemoryBookings.findIndex((b) => b._id === id);
+    if (idx !== -1 && updated) {
+      inMemoryBookings[idx] = updated;
+      persistStore();
+    }
+
+    return updated;
+  }
+
+  // Fallback to in-memory if no token is available
   await delay();
 
   const bookingIndex = inMemoryBookings.findIndex((b) => b._id === id);
@@ -611,9 +663,38 @@ export async function getAdminBookings(statusFilter?: string): Promise<Booking[]
    ========================================================= */
 
 /**
- * Get payments (for customer history or admin all transactions)
+ * Get payments (for customer history or admin all transactions).
+ * Calls Express GET /api/payments/my with Authorization: Bearer <getAuthToken()>.
  */
 export async function getPayments(customerEmail?: string): Promise<Payment[]> {
+  const token = await getAuthToken();
+
+  if (token) {
+    const res = await fetch(`${API_URL}/api/payments/my`, {
+      headers: {
+        Authorization: `Bearer ${token}`,
+      },
+      cache: 'no-store',
+    });
+
+    if (res.ok) {
+      const data = await res.json();
+      return Array.isArray(data) ? data : [];
+    }
+
+    const errorData = await res.json().catch(() => ({}));
+    if (res.status === 403 && !customerEmail) {
+      // In case admin or other caller accesses it before I6
+      return [...inMemoryPayments].sort(
+        (a, b) => new Date(b.paidAt).getTime() - new Date(a.paidAt).getTime()
+      );
+    }
+    const err = new Error(errorData.message || `Failed to fetch payment history: ${res.statusText}`);
+    (err as unknown as { status: number }).status = res.status;
+    throw err;
+  }
+
+  // Fallback to in-memory if no token
   await delay();
 
   if (!customerEmail) {
@@ -712,49 +793,73 @@ export async function updateUserProfile(
    STATS FUNCTIONS
    ========================================================= */
 
+/**
+ * Fetch customer dashboard stats and 6-month activity timeline.
+ * Calls Express GET /api/customer/stats with Authorization: Bearer <getAuthToken()>.
+ */
+export async function getCustomerStats(): Promise<CustomerStats> {
+  const token = await getAuthToken();
+
+  if (token) {
+    const res = await fetch(`${API_URL}/api/customer/stats`, {
+      headers: {
+        Authorization: `Bearer ${token}`,
+      },
+      cache: 'no-store',
+    });
+
+    if (res.ok) {
+      const data = await res.json();
+      return {
+        totalRequests: data.totalRequests ?? data.total ?? 0,
+        activeJobs: data.activeJobs ?? data.active ?? 0,
+        completedJobs: data.completedJobs ?? data.completed ?? 0,
+        totalSpent: data.totalSpent ?? 0,
+        chartData: Array.isArray(data.chartData) ? data.chartData : [],
+      };
+    }
+
+    const errorData = await res.json().catch(() => ({}));
+    const err = new Error(errorData.message || `Failed to fetch customer stats: ${res.statusText}`);
+    (err as unknown as { status: number }).status = res.status;
+    throw err;
+  }
+
+  // Fallback to in-memory if no token
+  await delay();
+  const totalRequests = inMemoryBookings.length;
+  const activeJobs = inMemoryBookings.filter((b) =>
+    ['requested', 'accepted', 'in-progress'].includes(b.status)
+  ).length;
+  const completedJobs = inMemoryBookings.filter((b) => b.status === 'completed').length;
+  const totalSpent = inMemoryPayments.reduce((sum, p) => sum + p.amount, 0);
+
+  const chartData = [
+    { month: 'Oct', requests: 1, spent: 75 },
+    { month: 'Nov', requests: 2, spent: 155 },
+    { month: 'Dec', requests: 1, spent: 90 },
+    { month: 'Jan', requests: 3, spent: 220 },
+    { month: 'Feb', requests: Math.max(1, totalRequests), spent: Math.max(50, totalSpent) },
+  ];
+
+  return {
+    totalRequests,
+    activeJobs,
+    completedJobs,
+    totalSpent,
+    chartData,
+  };
+}
+
 export async function getStats(
   role: 'customer' | 'technician' | 'admin' | 'public',
   email?: string
 ): Promise<CustomerStats | TechnicianStats | AdminStats | PublicStats> {
-  await delay();
-
   if (role === 'customer') {
-    const userBookings = email
-      ? inMemoryBookings.filter(
-          (b) => b.customerEmail.toLowerCase() === email.toLowerCase()
-        )
-      : inMemoryBookings;
-
-    const totalRequests = userBookings.length;
-    const activeJobs = userBookings.filter((b) =>
-      ['requested', 'accepted', 'in-progress'].includes(b.status)
-    ).length;
-    const completedJobs = userBookings.filter((b) => b.status === 'completed').length;
-
-    const userPayments = email
-      ? inMemoryPayments.filter(
-          (p) => p.customerEmail.toLowerCase() === email.toLowerCase()
-        )
-      : inMemoryPayments;
-
-    const totalSpent = userPayments.reduce((sum, p) => sum + p.amount, 0);
-
-    const chartData = [
-      { month: 'Oct', requests: 1, spent: 75 },
-      { month: 'Nov', requests: 2, spent: 155 },
-      { month: 'Dec', requests: 1, spent: 90 },
-      { month: 'Jan', requests: 3, spent: 220 },
-      { month: 'Feb', requests: Math.max(1, totalRequests), spent: Math.max(50, totalSpent) },
-    ];
-
-    return {
-      totalRequests,
-      activeJobs,
-      completedJobs,
-      totalSpent,
-      chartData,
-    } as CustomerStats;
+    return getCustomerStats();
   }
+
+  await delay();
 
   if (role === 'technician') {
     const techServices = email

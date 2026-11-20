@@ -38,13 +38,31 @@ export const {
 export async function getAuthToken(): Promise<string | null> {
   try {
     // authClient.token() requests GET /api/auth/token from Better Auth
-    const res = await (authClient as unknown as { token: () => Promise<{ data?: { token: string }; error?: unknown }> }).token();
-    if (res?.data?.token) {
-      return res.data.token;
+    if (typeof (authClient as unknown as { token?: () => Promise<{ data?: { token: string }; error?: unknown }> }).token === 'function') {
+      const res = await (authClient as unknown as { token: () => Promise<{ data?: { token: string }; error?: unknown }> }).token();
+      if (res?.data?.token) {
+        return res.data.token;
+      }
     }
-    return null;
   } catch (error) {
-    console.error("Failed to retrieve JWT auth token:", error);
-    return null;
+    console.warn("authClient.token() call failed, falling back to endpoint:", error);
   }
+
+  try {
+    const baseURL =
+      process.env.NEXT_PUBLIC_BETTER_AUTH_URL ||
+      process.env.BETTER_AUTH_URL ||
+      (typeof window !== 'undefined' ? window.location.origin : 'http://localhost:3000');
+    const res = await fetch(`${baseURL}/api/auth/token`, {
+      credentials: 'include',
+    });
+    if (res.ok) {
+      const json = await res.json();
+      if (json?.token) return json.token;
+    }
+  } catch (err) {
+    console.error("Failed to retrieve JWT auth token via direct fetch:", err);
+  }
+
+  return null;
 }
