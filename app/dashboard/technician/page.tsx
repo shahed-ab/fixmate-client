@@ -11,6 +11,7 @@ import {
   ArrowRight,
   ShieldCheck,
 } from 'lucide-react';
+import { useSession } from '@/lib/auth-client';
 import { useMockSession } from '@/lib/mock-session';
 import { getStats, getTechnicianServices } from '@/lib/data';
 import { TechnicianStats, Service } from '@/lib/types';
@@ -20,7 +21,9 @@ import { StatusBadge } from '@/components/StatusBadge';
 import { Button } from '@/components/Button';
 
 export default function TechnicianOverviewPage() {
-  const { user } = useMockSession();
+  const { data: session } = useSession();
+  const { user: mockUser } = useMockSession();
+  const user = session?.user || mockUser;
   const [stats, setStats] = useState<TechnicianStats | null>(null);
   const [recentServices, setRecentServices] = useState<Service[]>([]);
   const [isLoading, setIsLoading] = useState(true);

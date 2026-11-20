@@ -15,6 +15,7 @@ import {
   AlertCircle,
   ImageIcon,
 } from 'lucide-react';
+import { useSession } from '@/lib/auth-client';
 import { useMockSession } from '@/lib/mock-session';
 import { createService } from '@/lib/data';
 import { SERVICE_CATEGORIES, ServiceCategory, ServiceMode } from '@/lib/types';
@@ -25,7 +26,9 @@ import { toast } from 'sonner';
 
 export default function AddServicePage() {
   const router = useRouter();
-  const { user } = useMockSession();
+  const { data: session } = useSession();
+  const { user: mockUser } = useMockSession();
+  const user = session?.user || mockUser;
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const [imagePreview, setImagePreview] = useState<string>('');
