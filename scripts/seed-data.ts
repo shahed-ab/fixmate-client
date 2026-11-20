@@ -1,6 +1,6 @@
 import { User, Service, Booking, Payment } from '../lib/types';
 
-export const mockUsers: User[] = [
+export const seedUsers: User[] = [
   // 1 Admin
   {
     _id: 'usr_admin_01',
@@ -83,7 +83,7 @@ export const mockUsers: User[] = [
   },
 ];
 
-export const mockServices: Service[] = [
+export const seedServices: Service[] = [
   // 1. Smartphone - 2 Approved
   {
     _id: 'srv_phone_01',
@@ -375,7 +375,7 @@ export const mockServices: Service[] = [
   },
 ];
 
-export const mockBookings: Booking[] = [
+export const seedBookings: Booking[] = [
   // 1. requested
   {
     _id: 'bkg_001',
@@ -567,7 +567,7 @@ export const mockBookings: Booking[] = [
   },
 ];
 
-export const mockPayments: Payment[] = [
+export const seedPayments: Payment[] = [
   {
     _id: 'pmt_001',
     bookingId: 'bkg_006',

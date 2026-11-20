@@ -7,7 +7,7 @@ dotenv.config({ path: path.resolve(process.cwd(), '.env.local') });
 dotenv.config({ path: path.resolve(process.cwd(), '../server/.env') });
 dotenv.config();
 
-import { mockUsers, mockServices, mockBookings, mockPayments } from './seed-data';
+import { seedUsers, seedServices, seedBookings, seedPayments } from './seed-data';
 
 // Default universal password for seeded accounts (meets all complexity rules)
 const SEED_PASSWORD = 'Password123!';
@@ -36,7 +36,7 @@ async function seed() {
   // --------------------------------------------------------------------------
   console.log('--- 1. Seeding Users (auth.api.signUpEmail) ---');
 
-  for (const u of mockUsers) {
+  for (const u of seedUsers) {
     const existing = await usersCol.findOne({ email: u.email });
     if (!existing) {
       console.log(`Creating ${u.role}: ${u.name} <${u.email}>...`);
@@ -63,7 +63,7 @@ async function seed() {
   }
 
   // Set the admin role directly in Mongo per specification
-  const adminUser = mockUsers.find((u) => u.role === 'admin');
+  const adminUser = seedUsers.find((u) => u.role === 'admin');
   if (adminUser) {
     console.log(`\nPromoting ${adminUser.email} to 'admin' role directly in MongoDB...`);
     await usersCol.updateOne(
@@ -82,7 +82,7 @@ async function seed() {
   }
 
   // Ensure rich profile fields (image, phone, area, bio) are set for all users
-  for (const u of mockUsers) {
+  for (const u of seedUsers) {
     await usersCol.updateOne(
       { email: u.email },
       {
@@ -105,12 +105,12 @@ async function seed() {
   const serviceIdMap = new Map<string, ObjectId>();
   const serviceHexPrefix = '65a0000000000000000000';
 
-  mockServices.forEach((s, idx) => {
+  seedServices.forEach((s, idx) => {
     const hex = `${serviceHexPrefix}${String(idx + 1).padStart(2, '0')}`;
     serviceIdMap.set(s._id, new ObjectId(hex));
   });
 
-  for (const s of mockServices) {
+  for (const s of seedServices) {
     const targetId = serviceIdMap.get(s._id)!;
     const existing = await servicesCol.findOne({
       $or: [{ _id: targetId }, { title: s.title }],
@@ -148,12 +148,12 @@ async function seed() {
   const bookingIdMap = new Map<string, ObjectId>();
   const bookingHexPrefix = '65b0000000000000000000';
 
-  mockBookings.forEach((b, idx) => {
+  seedBookings.forEach((b, idx) => {
     const hex = `${bookingHexPrefix}${String(idx + 1).padStart(2, '0')}`;
     bookingIdMap.set(b._id, new ObjectId(hex));
   });
 
-  for (const b of mockBookings) {
+  for (const b of seedBookings) {
     const targetBookingId = bookingIdMap.get(b._id)!;
     const mappedServiceId = serviceIdMap.get(b.serviceId);
     const serviceIdStr = mappedServiceId ? mappedServiceId.toString() : b.serviceId;
@@ -206,12 +206,12 @@ async function seed() {
   const paymentIdMap = new Map<string, ObjectId>();
   const paymentHexPrefix = '65c0000000000000000000';
 
-  mockPayments.forEach((p, idx) => {
+  seedPayments.forEach((p, idx) => {
     const hex = `${paymentHexPrefix}${String(idx + 1).padStart(2, '0')}`;
     paymentIdMap.set(p._id, new ObjectId(hex));
   });
 
-  for (const p of mockPayments) {
+  for (const p of seedPayments) {
     const targetPaymentId = paymentIdMap.get(p._id)!;
     const mappedBookingId = bookingIdMap.get(p.bookingId);
     const bookingIdStr = mappedBookingId ? mappedBookingId.toString() : p.bookingId;
