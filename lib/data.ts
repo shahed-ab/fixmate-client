@@ -348,10 +348,34 @@ export async function cancelBooking(
 
 /**
  * Get services belonging to a technician
+ * Calls Express GET /api/services/my with Authorization: Bearer <getAuthToken()>.
  */
 export async function getTechnicianServices(
   technicianEmail?: string
 ): Promise<Service[]> {
+  const token = await getAuthToken();
+
+  if (token) {
+    const res = await fetch(`${API_URL}/api/services/my`, {
+      headers: {
+        Authorization: `Bearer ${token}`,
+      },
+      cache: 'no-store',
+    });
+
+    if (res.ok) {
+      const data = await res.json();
+      return Array.isArray(data) ? data : [];
+    }
+
+    const errorData = await res.json().catch(() => ({}));
+    const err = new Error(
+      errorData.message || `Failed to fetch technician services: ${res.statusText}`
+    );
+    (err as unknown as { status: number }).status = res.status;
+    throw err;
+  }
+
   await delay();
   if (!technicianEmail) {
     return [...inMemoryServices];
@@ -363,10 +387,50 @@ export async function getTechnicianServices(
 
 /**
  * Create service: sets approvalStatus to 'pending' and isAvailable to true
+ * Calls Express POST /api/services with Authorization: Bearer <getAuthToken()>.
  */
 export async function createService(
   serviceData: Omit<Service, '_id' | 'createdAt' | 'approvalStatus' | 'isAvailable'>
 ): Promise<Service> {
+  const token = await getAuthToken();
+
+  if (token) {
+    const res = await fetch(`${API_URL}/api/services`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${token}`,
+      },
+      body: JSON.stringify({
+        title: serviceData.title,
+        category: serviceData.category,
+        description: serviceData.description,
+        image: serviceData.image,
+        basePrice: Number(serviceData.basePrice),
+        estimatedDuration: serviceData.estimatedDuration,
+        serviceMode: serviceData.serviceMode,
+        serviceArea: serviceData.serviceArea,
+      }),
+    });
+
+    const resData = await res.json().catch(() => ({}));
+
+    if (!res.ok) {
+      const err = new Error(
+        resData.message || `Failed to create service: ${res.statusText}`
+      );
+      (err as unknown as { status: number }).status = res.status;
+      throw err;
+    }
+
+    const created = resData.service || resData;
+    if (created) {
+      inMemoryServices.unshift(created);
+      persistStore();
+    }
+    return created;
+  }
+
   await delay();
 
   const newService: Service = {
@@ -385,11 +449,53 @@ export async function createService(
 
 /**
  * Update own service (resets approvalStatus to 'pending')
+ * Calls Express PATCH /api/services/:id with Authorization: Bearer <getAuthToken()>.
  */
 export async function updateService(
   id: string,
   updates: Partial<Service>
 ): Promise<Service> {
+  const token = await getAuthToken();
+
+  if (token) {
+    const payload: Record<string, unknown> = {};
+    if (updates.title !== undefined) payload.title = updates.title;
+    if (updates.category !== undefined) payload.category = updates.category;
+    if (updates.description !== undefined) payload.description = updates.description;
+    if (updates.image !== undefined) payload.image = updates.image;
+    if (updates.basePrice !== undefined) payload.basePrice = Number(updates.basePrice);
+    if (updates.estimatedDuration !== undefined) payload.estimatedDuration = updates.estimatedDuration;
+    if (updates.serviceMode !== undefined) payload.serviceMode = updates.serviceMode;
+    if (updates.serviceArea !== undefined) payload.serviceArea = updates.serviceArea;
+
+    const res = await fetch(`${API_URL}/api/services/${id}`, {
+      method: 'PATCH',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${token}`,
+      },
+      body: JSON.stringify(payload),
+    });
+
+    const resData = await res.json().catch(() => ({}));
+
+    if (!res.ok) {
+      const err = new Error(
+        resData.message || `Failed to update service: ${res.statusText}`
+      );
+      (err as unknown as { status: number }).status = res.status;
+      throw err;
+    }
+
+    const updated = resData.service || resData;
+    const index = inMemoryServices.findIndex((s) => s._id === id);
+    if (index !== -1 && updated) {
+      inMemoryServices[index] = updated;
+      persistStore();
+    }
+    return updated;
+  }
+
   await delay();
 
   const index = inMemoryServices.findIndex((s) => s._id === id);
@@ -411,8 +517,37 @@ export async function updateService(
 
 /**
  * Delete service
+ * Calls Express DELETE /api/services/:id with Authorization: Bearer <getAuthToken()>.
  */
 export async function deleteService(id: string): Promise<boolean> {
+  const token = await getAuthToken();
+
+  if (token) {
+    const res = await fetch(`${API_URL}/api/services/${id}`, {
+      method: 'DELETE',
+      headers: {
+        Authorization: `Bearer ${token}`,
+      },
+    });
+
+    const resData = await res.json().catch(() => ({}));
+
+    if (!res.ok) {
+      const err = new Error(
+        resData.message || `Failed to delete service: ${res.statusText}`
+      );
+      (err as unknown as { status: number }).status = res.status;
+      throw err;
+    }
+
+    const index = inMemoryServices.findIndex((s) => s._id === id);
+    if (index !== -1) {
+      inMemoryServices.splice(index, 1);
+      persistStore();
+    }
+    return true;
+  }
+
   await delay();
 
   const index = inMemoryServices.findIndex((s) => s._id === id);
@@ -428,8 +563,40 @@ export async function deleteService(id: string): Promise<boolean> {
 
 /**
  * Toggle availability of a service (must NOT reset approvalStatus)
+ * Calls Express PATCH /api/services/:id/availability with Authorization: Bearer <getAuthToken()>.
  */
 export async function toggleAvailability(id: string): Promise<Service> {
+  const token = await getAuthToken();
+
+  if (token) {
+    const res = await fetch(`${API_URL}/api/services/${id}/availability`, {
+      method: 'PATCH',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${token}`,
+      },
+      body: JSON.stringify({}),
+    });
+
+    const resData = await res.json().catch(() => ({}));
+
+    if (!res.ok) {
+      const err = new Error(
+        resData.message || `Failed to toggle availability: ${res.statusText}`
+      );
+      (err as unknown as { status: number }).status = res.status;
+      throw err;
+    }
+
+    const updated = resData.service || resData;
+    const index = inMemoryServices.findIndex((s) => s._id === id);
+    if (index !== -1 && updated) {
+      inMemoryServices[index] = updated;
+      persistStore();
+    }
+    return updated;
+  }
+
   await delay();
 
   const index = inMemoryServices.findIndex((s) => s._id === id);
@@ -451,19 +618,55 @@ export async function toggleAvailability(id: string): Promise<Service> {
 
 /**
  * Get bookings assigned to a technician
+ * Calls Express GET /api/bookings/technician with Authorization: Bearer <getAuthToken()>.
  */
 export async function getTechnicianBookings(
-  technicianEmail?: string
+  technicianEmail?: string,
+  statusFilter?: string
 ): Promise<Booking[]> {
+  const token = await getAuthToken();
+
+  if (token) {
+    const query = new URLSearchParams();
+    if (statusFilter && statusFilter !== 'all') {
+      query.set('status', statusFilter);
+    }
+    const queryString = query.toString();
+    const url = `${API_URL}/api/bookings/technician${queryString ? `?${queryString}` : ''}`;
+
+    const res = await fetch(url, {
+      headers: {
+        Authorization: `Bearer ${token}`,
+      },
+      cache: 'no-store',
+    });
+
+    if (res.ok) {
+      const data = await res.json();
+      return Array.isArray(data) ? data : [];
+    }
+
+    const errorData = await res.json().catch(() => ({}));
+    const err = new Error(
+      errorData.message || `Failed to fetch technician requests: ${res.statusText}`
+    );
+    (err as unknown as { status: number }).status = res.status;
+    throw err;
+  }
+
   await delay();
-  if (!technicianEmail) {
-    return [...inMemoryBookings].sort(
-      (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
+  let list = inMemoryBookings;
+  if (technicianEmail) {
+    list = list.filter(
+      (b) => b.technicianEmail.toLowerCase() === technicianEmail.toLowerCase()
     );
   }
-  return inMemoryBookings
-    .filter((b) => b.technicianEmail.toLowerCase() === technicianEmail.toLowerCase())
-    .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+  if (statusFilter && statusFilter !== 'all') {
+    list = list.filter((b) => b.status === statusFilter);
+  }
+  return list.sort(
+    (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
+  );
 }
 
 /**
@@ -473,6 +676,8 @@ export async function getTechnicianBookings(
  * - accepted -> in-progress: technician
  * - in-progress -> completed: technician (finalAmount > 0 required)
  * - rejected / cancelled / completed: final states (completed only changes paymentStatus)
+ *
+ * Calls Express PATCH /api/bookings/:id/status with Authorization: Bearer <getAuthToken()>.
  */
 export async function updateBookingStatus(
   id: string,
@@ -483,6 +688,44 @@ export async function updateBookingStatus(
     customerEmail?: string;
   }
 ): Promise<Booking> {
+  const token = await getAuthToken();
+
+  if (token) {
+    const payload: { status: string; finalAmount?: number } = {
+      status: nextStatus,
+    };
+    if (options?.finalAmount !== undefined) {
+      payload.finalAmount = Number(options.finalAmount);
+    }
+
+    const res = await fetch(`${API_URL}/api/bookings/${id}/status`, {
+      method: 'PATCH',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${token}`,
+      },
+      body: JSON.stringify(payload),
+    });
+
+    const resData = await res.json().catch(() => ({}));
+
+    if (!res.ok) {
+      const err = new Error(
+        resData.message || `Failed to update job status: ${res.statusText}`
+      );
+      (err as unknown as { status: number }).status = res.status;
+      throw err;
+    }
+
+    const updated = resData.booking || resData;
+    const index = inMemoryBookings.findIndex((b) => b._id === id);
+    if (index !== -1 && updated) {
+      inMemoryBookings[index] = updated;
+      persistStore();
+    }
+    return updated;
+  }
+
   await delay();
 
   const index = inMemoryBookings.findIndex((b) => b._id === id);
@@ -914,6 +1157,96 @@ export async function getCustomerStats(): Promise<CustomerStats> {
   };
 }
 
+/**
+ * Fetch technician dashboard stats and 6-month metrics timeline.
+ * Calls Express GET /api/technician/stats with Authorization: Bearer <getAuthToken()>.
+ */
+export async function getTechnicianStats(
+  email?: string
+): Promise<TechnicianStats> {
+  const token = await getAuthToken();
+
+  if (token) {
+    const res = await fetch(`${API_URL}/api/technician/stats`, {
+      headers: {
+        Authorization: `Bearer ${token}`,
+      },
+      cache: 'no-store',
+    });
+
+    if (res.ok) {
+      const data = await res.json();
+      return {
+        totalServices: data.totalServices ?? 0,
+        approvedServices: data.approvedServices ?? 0,
+        pendingRequests: data.pendingRequests ?? 0,
+        completedJobs: data.completedJobs ?? 0,
+        totalEarnings: data.totalEarnings ?? 0,
+        chartData: Array.isArray(data.chartData)
+          ? data.chartData
+          : Array.isArray(data.earningsByMonth)
+          ? data.earningsByMonth
+          : [],
+      };
+    }
+
+    const errorData = await res.json().catch(() => ({}));
+    const err = new Error(
+      errorData.message || `Failed to fetch technician stats: ${res.statusText}`
+    );
+    (err as unknown as { status: number }).status = res.status;
+    throw err;
+  }
+
+  await delay();
+  const techServices = email
+    ? inMemoryServices.filter(
+        (s) => s.technicianEmail.toLowerCase() === email.toLowerCase()
+      )
+    : inMemoryServices;
+
+  const techBookings = email
+    ? inMemoryBookings.filter(
+        (b) => b.technicianEmail.toLowerCase() === email.toLowerCase()
+      )
+    : inMemoryBookings;
+
+  const totalServices = techServices.length;
+  const approvedServices = techServices.filter(
+    (s) => s.approvalStatus === 'approved'
+  ).length;
+  const pendingRequests = techBookings.filter(
+    (b) => b.status === 'requested'
+  ).length;
+  const completedJobs = techBookings.filter(
+    (b) => b.status === 'completed'
+  ).length;
+  const totalEarnings = techBookings
+    .filter((b) => b.status === 'completed' && b.paymentStatus === 'paid')
+    .reduce((sum, b) => sum + b.finalAmount, 0);
+
+  const chartData = [
+    { month: 'Oct', jobs: 3, earnings: 340 },
+    { month: 'Nov', jobs: 5, earnings: 580 },
+    { month: 'Dec', jobs: 4, earnings: 490 },
+    { month: 'Jan', jobs: 6, earnings: 720 },
+    {
+      month: 'Feb',
+      jobs: Math.max(2, completedJobs),
+      earnings: Math.max(195, totalEarnings),
+    },
+  ];
+
+  return {
+    totalServices,
+    approvedServices,
+    pendingRequests,
+    completedJobs,
+    totalEarnings,
+    chartData,
+  };
+}
+
 export async function getStats(
   role: 'customer' | 'technician' | 'admin' | 'public',
   email?: string
@@ -922,52 +1255,11 @@ export async function getStats(
     return getCustomerStats();
   }
 
-  await delay();
-
   if (role === 'technician') {
-    const techServices = email
-      ? inMemoryServices.filter(
-          (s) => s.technicianEmail.toLowerCase() === email.toLowerCase()
-        )
-      : inMemoryServices;
-
-    const techBookings = email
-      ? inMemoryBookings.filter(
-          (b) => b.technicianEmail.toLowerCase() === email.toLowerCase()
-        )
-      : inMemoryBookings;
-
-    const totalServices = techServices.length;
-    const approvedServices = techServices.filter(
-      (s) => s.approvalStatus === 'approved'
-    ).length;
-    const pendingRequests = techBookings.filter(
-      (b) => b.status === 'requested'
-    ).length;
-    const completedJobs = techBookings.filter(
-      (b) => b.status === 'completed'
-    ).length;
-    const totalEarnings = techBookings
-      .filter((b) => b.status === 'completed' && b.paymentStatus === 'paid')
-      .reduce((sum, b) => sum + b.finalAmount, 0);
-
-    const chartData = [
-      { month: 'Oct', jobs: 3, earnings: 340 },
-      { month: 'Nov', jobs: 5, earnings: 580 },
-      { month: 'Dec', jobs: 4, earnings: 490 },
-      { month: 'Jan', jobs: 6, earnings: 720 },
-      { month: 'Feb', jobs: Math.max(2, completedJobs), earnings: Math.max(195, totalEarnings) },
-    ];
-
-    return {
-      totalServices,
-      approvedServices,
-      pendingRequests,
-      completedJobs,
-      totalEarnings,
-      chartData,
-    } as TechnicianStats;
+    return getTechnicianStats(email);
   }
+
+  await delay();
 
   if (role === 'admin') {
     const totalUsers = inMemoryUsers.length;
