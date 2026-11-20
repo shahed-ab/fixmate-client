@@ -2,19 +2,22 @@
 
 import React, { useState, useRef, useEffect } from 'react';
 import Link from 'next/link';
-import { usePathname } from 'next/navigation';
+import { usePathname, useRouter } from 'next/navigation';
 import { Menu, X, LayoutDashboard, UserCircle, LogOut, ChevronDown } from 'lucide-react';
 import { toast } from 'sonner';
 import { Logo } from '@/components/Logo';
 import { Container } from '@/components/Container';
 import { Button } from '@/components/Button';
 import { StatusBadge } from '@/components/StatusBadge';
-import { useMockSession } from '@/lib/mock-session';
+import { useSession, signOut } from '@/lib/auth-client';
 import { cn } from '@/lib/utils';
 
 export function Navbar() {
   const pathname = usePathname();
-  const { user, role, signOut } = useMockSession();
+  const router = useRouter();
+  const { data: session } = useSession();
+  const user = session?.user;
+  const role = (user as { role?: string } | undefined)?.role || (user ? 'customer' : 'guest');
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [dropdownOpen, setDropdownOpen] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
@@ -54,10 +57,12 @@ export function Navbar() {
       ? '/dashboard/technician'
       : '/dashboard/customer';
 
-  const handleSignOut = () => {
-    signOut();
+  const handleSignOut = async () => {
+    await signOut();
     setDropdownOpen(false);
     toast.success('Signed out successfully.');
+    router.push('/sign-in');
+    router.refresh();
   };
 
   return (
@@ -128,7 +133,7 @@ export function Navbar() {
                   <div className="px-3 py-2.5 border-b border-border/70 mb-1">
                     <p className="text-sm font-semibold text-foreground truncate">{user.name}</p>
                     <p className="text-xs text-muted-foreground truncate mb-2">{user.email}</p>
-                    <StatusBadge status={user.role} />
+                    <StatusBadge status={(role as any) || 'customer'} />
                   </div>
 
                   <div className="space-y-0.5">
@@ -231,7 +236,7 @@ export function Navbar() {
                   <div className="flex-1 min-w-0">
                     <p className="text-sm font-medium text-foreground truncate">{user.name}</p>
                     <div className="mt-0.5">
-                      <StatusBadge status={user.role} />
+                      <StatusBadge status={(role as any) || 'customer'} />
                     </div>
                   </div>
                 </div>

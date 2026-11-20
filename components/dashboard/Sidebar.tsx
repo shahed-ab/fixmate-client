@@ -21,7 +21,7 @@ import {
   X,
 } from 'lucide-react';
 import { UserRole } from '@/lib/types';
-import { useMockSession } from '@/lib/mock-session';
+import { signOut } from '@/lib/auth-client';
 import { Logo } from '@/components/Logo';
 import { cn } from '@/lib/utils';
 import { toast } from 'sonner';
@@ -80,13 +80,13 @@ export function Sidebar({
   onCloseMobile,
 }: SidebarProps) {
   const pathname = usePathname();
-  const { signOut } = useMockSession();
   const navItems = getNavItemsForRole(role);
 
-  const handleSignOut = () => {
-    signOut();
+  const handleSignOut = async () => {
+    await signOut();
     toast.success('Signed out successfully');
     onCloseMobile();
+    window.location.href = '/sign-in';
   };
 
   const navContent = (

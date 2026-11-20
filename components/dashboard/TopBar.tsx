@@ -2,7 +2,7 @@
 
 import React, { useState, useRef, useEffect } from 'react';
 import Link from 'next/link';
-import { usePathname } from 'next/navigation';
+import { usePathname, useRouter } from 'next/navigation';
 import {
   Menu,
   Home,
@@ -11,7 +11,7 @@ import {
   ChevronDown,
   ExternalLink,
 } from 'lucide-react';
-import { useMockSession } from '@/lib/mock-session';
+import { useSession, signOut } from '@/lib/auth-client';
 import { UserRole } from '@/lib/types';
 import { cn } from '@/lib/utils';
 import { toast } from 'sonner';
@@ -40,7 +40,10 @@ const ROLE_BADGE_CONFIG: Record<
 
 export function TopBar({ onToggleMobileSidebar }: TopBarProps) {
   const pathname = usePathname();
-  const { user, role, signOut } = useMockSession();
+  const router = useRouter();
+  const { data: session } = useSession();
+  const user = session?.user;
+  const role = ((user as { role?: string } | undefined)?.role || 'customer') as UserRole;
   const [dropdownOpen, setDropdownOpen] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
 
@@ -73,13 +76,15 @@ export function TopBar({ onToggleMobileSidebar }: TopBarProps) {
     return 'Dashboard';
   };
 
-  const handleSignOut = () => {
-    signOut();
+  const handleSignOut = async () => {
+    await signOut();
     setDropdownOpen(false);
     toast.success('Signed out successfully');
+    router.push('/sign-in');
+    router.refresh();
   };
 
-  const currentRole = (role === 'guest' ? 'customer' : role) as UserRole;
+  const currentRole = role;
   const roleBadge = ROLE_BADGE_CONFIG[currentRole] || ROLE_BADGE_CONFIG.customer;
 
   // Initials for avatar fallback

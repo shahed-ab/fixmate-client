@@ -20,7 +20,8 @@ import {
 import { toast } from 'sonner';
 import { Service } from '@/lib/types';
 import { Button } from '@/components/Button';
-import { useMockSession } from '@/lib/mock-session';
+import { useSession } from '@/lib/auth-client';
+import { UserRole } from '@/lib/types';
 import { createBooking } from '@/lib/data';
 import { cn } from '@/lib/utils';
 
@@ -30,7 +31,9 @@ interface BookingSidebarProps {
 
 export function BookingSidebar({ service }: BookingSidebarProps) {
   const router = useRouter();
-  const { user, role } = useMockSession();
+  const { data: session } = useSession();
+  const user = session?.user;
+  const role = ((user as { role?: string } | undefined)?.role || (user ? 'customer' : 'guest')) as UserRole | 'guest';
 
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -61,8 +64,10 @@ export function BookingSidebar({ service }: BookingSidebarProps) {
 
   // Pre-fill phone and address if user has them saved
   useEffect(() => {
-    if (user?.phone && !phone) setPhone(user.phone);
-    if (user?.area && !address) setAddress(user.area);
+    const userPhone = (user as { phone?: string } | undefined)?.phone;
+    const userArea = (user as { area?: string } | undefined)?.area;
+    if (userPhone && !phone) setPhone(userPhone);
+    if (userArea && !address) setAddress(userArea);
   }, [user, phone, address]);
 
   const validateForm = () => {
