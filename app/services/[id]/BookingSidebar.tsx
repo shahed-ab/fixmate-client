@@ -136,15 +136,18 @@ export function BookingSidebar({ service }: BookingSidebarProps) {
         },
       });
     } catch (err: unknown) {
-      const errorMsg =
-        err instanceof Error ? err.message : 'Failed to submit repair request.';
+      const is409 =
+        (err as { status?: number })?.status === 409 ||
+        (err instanceof Error &&
+          (err.message.includes('409') ||
+            err.message.toLowerCase().includes('already have an active request') ||
+            err.message.toLowerCase().includes('active request')));
 
-      if (
-        errorMsg.toLowerCase().includes('already have an active request') ||
-        errorMsg.toLowerCase().includes('active request')
-      ) {
+      if (is409) {
         toast.error('You already have an active request for this service.');
       } else {
+        const errorMsg =
+          err instanceof Error ? err.message : 'Failed to submit repair request.';
         toast.error(errorMsg);
       }
     } finally {
