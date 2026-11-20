@@ -12,7 +12,6 @@ import {
   ShieldCheck,
 } from 'lucide-react';
 import { useSession } from '@/lib/auth-client';
-import { useMockSession } from '@/lib/mock-session';
 import { getStats, getTechnicianServices } from '@/lib/data';
 import { TechnicianStats, Service } from '@/lib/types';
 import { StatsCard } from '@/components/StatsCard';
@@ -22,8 +21,7 @@ import { Button } from '@/components/Button';
 
 export default function TechnicianOverviewPage() {
   const { data: session } = useSession();
-  const { user: mockUser } = useMockSession();
-  const user = session?.user || mockUser;
+  const user = session?.user;
   const [stats, setStats] = useState<TechnicianStats | null>(null);
   const [recentServices, setRecentServices] = useState<Service[]>([]);
   const [isLoading, setIsLoading] = useState(true);

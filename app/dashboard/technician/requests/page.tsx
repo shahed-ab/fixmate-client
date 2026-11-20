@@ -15,7 +15,6 @@ import {
   Clock,
 } from 'lucide-react';
 import { useSession } from '@/lib/auth-client';
-import { useMockSession } from '@/lib/mock-session';
 import { getTechnicianBookings, updateBookingStatus } from '@/lib/data';
 import { Booking, BookingStatus } from '@/lib/types';
 import { DataTable, Column } from '@/components/DataTable';
@@ -30,8 +29,7 @@ type StatusFilter = 'all' | 'requested' | 'accepted' | 'in-progress' | 'complete
 
 export default function ManageRequestsPage() {
   const { data: session } = useSession();
-  const { user: mockUser } = useMockSession();
-  const user = session?.user || mockUser;
+  const user = session?.user;
   const [bookings, setBookings] = useState<Booking[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
@@ -50,7 +48,7 @@ export default function ManageRequestsPage() {
   const fetchBookings = async () => {
     try {
       setIsLoading(true);
-      const data = await getTechnicianBookings(user?.email);
+      const data = await getTechnicianBookings();
       setBookings(data);
     } catch (err) {
       console.error('Failed to load technician requests:', err);

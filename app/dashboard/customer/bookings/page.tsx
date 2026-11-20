@@ -14,7 +14,6 @@ import {
   CheckCircle,
 } from 'lucide-react';
 import { useSession } from '@/lib/auth-client';
-import { useMockSession } from '@/lib/mock-session';
 import { getMyBookings, cancelBooking, createCheckoutSession } from '@/lib/data';
 import { Booking, BookingStatus } from '@/lib/types';
 import { DataTable, Column } from '@/components/DataTable';
@@ -29,8 +28,7 @@ type StatusFilter = 'all' | BookingStatus;
 export default function MyBookingsPage() {
   const router = useRouter();
   const { data: session } = useSession();
-  const { user: mockUser } = useMockSession();
-  const user = session?.user || mockUser;
+  const user = session?.user;
   const [bookings, setBookings] = useState<Booking[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');

@@ -10,7 +10,6 @@ import {
   Calendar,
 } from 'lucide-react';
 import { useSession } from '@/lib/auth-client';
-import { useMockSession } from '@/lib/mock-session';
 import { getPayments } from '@/lib/data';
 import { Payment } from '@/lib/types';
 import { DataTable, Column } from '@/components/DataTable';
@@ -20,8 +19,7 @@ import { toast } from 'sonner';
 
 export default function CustomerPaymentHistoryPage() {
   const { data: session } = useSession();
-  const { user: mockUser } = useMockSession();
-  const user = session?.user || mockUser;
+  const user = session?.user;
   const [payments, setPayments] = useState<Payment[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [copiedId, setCopiedId] = useState<string | null>(null);

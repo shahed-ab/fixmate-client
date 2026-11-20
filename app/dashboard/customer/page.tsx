@@ -11,7 +11,6 @@ import {
   Plus,
 } from 'lucide-react';
 import { useSession } from '@/lib/auth-client';
-import { useMockSession } from '@/lib/mock-session';
 import { getStats, getMyBookings } from '@/lib/data';
 import { CustomerStats, Booking } from '@/lib/types';
 import { StatsCard } from '@/components/StatsCard';
@@ -23,8 +22,7 @@ import { toast } from 'sonner';
 
 export default function CustomerDashboardOverview() {
   const { data: session } = useSession();
-  const { user: mockUser } = useMockSession();
-  const user = session?.user || mockUser;
+  const user = session?.user;
   const [stats, setStats] = useState<CustomerStats | null>(null);
   const [recentBookings, setRecentBookings] = useState<Booking[]>([]);
   const [isLoading, setIsLoading] = useState(true);

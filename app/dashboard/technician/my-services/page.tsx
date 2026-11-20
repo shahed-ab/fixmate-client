@@ -14,7 +14,6 @@ import {
   AlertCircle,
 } from 'lucide-react';
 import { useSession } from '@/lib/auth-client';
-import { useMockSession } from '@/lib/mock-session';
 import {
   getTechnicianServices,
   updateService,
@@ -31,8 +30,7 @@ import { toast } from 'sonner';
 
 export default function MyServicesPage() {
   const { data: session } = useSession();
-  const { user: mockUser } = useMockSession();
-  const user = session?.user || mockUser;
+  const user = session?.user;
   const [services, setServices] = useState<Service[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
