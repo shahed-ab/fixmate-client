@@ -14,6 +14,7 @@ import {
   AlertCircle,
   Clock,
 } from 'lucide-react';
+import { useSession } from '@/lib/auth-client';
 import { useMockSession } from '@/lib/mock-session';
 import { getTechnicianBookings, updateBookingStatus } from '@/lib/data';
 import { Booking, BookingStatus } from '@/lib/types';
@@ -28,7 +29,9 @@ import { toast } from 'sonner';
 type StatusFilter = 'all' | 'requested' | 'accepted' | 'in-progress' | 'completed';
 
 export default function ManageRequestsPage() {
-  const { user } = useMockSession();
+  const { data: session } = useSession();
+  const { user: mockUser } = useMockSession();
+  const user = session?.user || mockUser;
   const [bookings, setBookings] = useState<Booking[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
