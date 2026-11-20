@@ -15,7 +15,7 @@ import {
 } from 'lucide-react';
 import { useSession } from '@/lib/auth-client';
 import { useMockSession } from '@/lib/mock-session';
-import { getMyBookings, cancelBooking, mockPayBooking } from '@/lib/data';
+import { getMyBookings, cancelBooking, createCheckoutSession } from '@/lib/data';
 import { Booking, BookingStatus } from '@/lib/types';
 import { DataTable, Column } from '@/components/DataTable';
 import { StatusBadge } from '@/components/StatusBadge';
@@ -78,24 +78,19 @@ export default function MyBookingsPage() {
     }
   };
 
-  // Handle Pay Now
+  // Handle Pay Now - Stripe Checkout
   const handlePayNow = async (booking: Booking) => {
     try {
       setPayingBookingId(booking._id);
-      /* replaced by Stripe in Phase 3 */
-      const payment = await mockPayBooking(booking._id);
-      toast.success(
-        `Payment of $${booking.finalAmount || booking.basePrice} processed successfully!`
-      );
-      router.push(
-        `/payment/success?amount=${payment.amount}&txn=${payment.transactionId}&service=${encodeURIComponent(
-          payment.serviceTitle
-        )}&booking_id=${payment.bookingId}`
-      );
+      const res = await createCheckoutSession(booking._id);
+      if (res?.url) {
+        window.location.href = res.url;
+      } else {
+        throw new Error('No checkout URL returned from server.');
+      }
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : 'Payment failed.';
       toast.error(msg);
-    } finally {
       setPayingBookingId(null);
     }
   };
