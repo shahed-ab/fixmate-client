@@ -17,17 +17,10 @@ import {
 } from 'lucide-react';
 import { Container } from '@/components/Container';
 import { getServiceById } from '@/lib/data';
-import { mockUsers, mockServices } from '@/lib/mock-data';
 import { BookingSidebar } from './BookingSidebar';
 
 interface ServiceDetailsPageProps {
   params: Promise<{ id: string }>;
-}
-
-export async function generateStaticParams() {
-  return mockServices
-    .filter((s) => s.approvalStatus === 'approved' && s.isAvailable)
-    .map((s) => ({ id: s._id }));
 }
 
 export async function generateMetadata({ params }: ServiceDetailsPageProps) {
@@ -53,10 +46,14 @@ export default async function ServiceDetailsPage({
     notFound();
   }
 
-  // Lookup assigned technician profile from mock data
-  const technician = mockUsers.find(
-    (u) => u.email.toLowerCase() === service.technicianEmail.toLowerCase()
-  );
+  // Lookup assigned technician summary from service response or service fields
+  const technician = (service as unknown as { technician?: { name?: string; email?: string; image?: string; phone?: string; area?: string; bio?: string } }).technician || {
+    name: service.technicianName,
+    email: service.technicianEmail,
+    area: service.serviceArea,
+    image: undefined,
+    bio: undefined,
+  };
 
   return (
     <div className="flex-1 py-8 md:py-12 space-y-10">

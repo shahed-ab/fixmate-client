@@ -1,4 +1,4 @@
-import { User, Service, Booking, Payment } from './types';
+import { User, Service, Booking, Payment } from '../lib/types';
 
 export const mockUsers: User[] = [
   // 1 Admin
@@ -460,7 +460,7 @@ export const mockBookings: Booking[] = [
     paymentStatus: 'unpaid',
     createdAt: '2026-02-17T11:20:00.000Z',
   },
-  // 5. completed & unpaid (ready for Pay Now testing!)
+  // 5. completed & unpaid
   {
     _id: 'bkg_005',
     serviceId: 'srv_wash_01',
@@ -477,7 +477,7 @@ export const mockBookings: Booking[] = [
     preferredDate: '2026-02-21T09:00:00.000Z',
     problemDescription: 'Washer vibrates violently during 1200 RPM spin cycle. Required replacement drum spider arm and new heavy-duty bearings.',
     status: 'completed',
-    finalAmount: 155, // Adjusted finalAmount upon job completion
+    finalAmount: 155,
     paymentStatus: 'unpaid',
     createdAt: '2026-02-15T12:00:00.000Z',
   },

@@ -7,7 +7,7 @@ dotenv.config({ path: path.resolve(process.cwd(), '.env.local') });
 dotenv.config({ path: path.resolve(process.cwd(), '../server/.env') });
 dotenv.config();
 
-import { mockUsers, mockServices, mockBookings, mockPayments } from '../lib/mock-data';
+import { mockUsers, mockServices, mockBookings, mockPayments } from './seed-data';
 
 // Default universal password for seeded accounts (meets all complexity rules)
 const SEED_PASSWORD = 'Password123!';

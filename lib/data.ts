@@ -13,86 +13,6 @@ import {
   PublicStats,
 } from './types';
 import { getAuthToken } from './auth-client';
-import {
-  mockUsers,
-  mockServices,
-  mockBookings,
-  mockPayments,
-} from './mock-data';
-
-const DELAY_MS = 300;
-
-const delay = (ms = DELAY_MS) =>
-  new Promise((resolve) => setTimeout(resolve, ms));
-
-const STORAGE_KEYS = {
-  USERS: 'fixmate_mock_users',
-  SERVICES: 'fixmate_mock_services',
-  BOOKINGS: 'fixmate_mock_bookings',
-  PAYMENTS: 'fixmate_mock_payments',
-};
-
-// In-memory cache
-let inMemoryUsers: User[] = [...mockUsers];
-let inMemoryServices: Service[] = [...mockServices];
-let inMemoryBookings: Booking[] = [...mockBookings];
-let inMemoryPayments: Payment[] = [...mockPayments];
-
-// Helper to check client environment
-const isClient = typeof window !== 'undefined';
-
-function initStore() {
-  if (!isClient) return;
-
-  try {
-    const storedUsers = localStorage.getItem(STORAGE_KEYS.USERS);
-    if (storedUsers) {
-      inMemoryUsers = JSON.parse(storedUsers);
-    } else {
-      localStorage.setItem(STORAGE_KEYS.USERS, JSON.stringify(mockUsers));
-    }
-
-    const storedServices = localStorage.getItem(STORAGE_KEYS.SERVICES);
-    if (storedServices) {
-      inMemoryServices = JSON.parse(storedServices);
-    } else {
-      localStorage.setItem(STORAGE_KEYS.SERVICES, JSON.stringify(mockServices));
-    }
-
-    const storedBookings = localStorage.getItem(STORAGE_KEYS.BOOKINGS);
-    if (storedBookings) {
-      inMemoryBookings = JSON.parse(storedBookings);
-    } else {
-      localStorage.setItem(STORAGE_KEYS.BOOKINGS, JSON.stringify(mockBookings));
-    }
-
-    const storedPayments = localStorage.getItem(STORAGE_KEYS.PAYMENTS);
-    if (storedPayments) {
-      inMemoryPayments = JSON.parse(storedPayments);
-    } else {
-      localStorage.setItem(STORAGE_KEYS.PAYMENTS, JSON.stringify(mockPayments));
-    }
-  } catch (err) {
-    console.warn('FixMate localStorage init warning:', err);
-  }
-}
-
-// Trigger initial load on module evaluation
-if (isClient) {
-  initStore();
-}
-
-function persistStore() {
-  if (!isClient) return;
-  try {
-    localStorage.setItem(STORAGE_KEYS.USERS, JSON.stringify(inMemoryUsers));
-    localStorage.setItem(STORAGE_KEYS.SERVICES, JSON.stringify(inMemoryServices));
-    localStorage.setItem(STORAGE_KEYS.BOOKINGS, JSON.stringify(inMemoryBookings));
-    localStorage.setItem(STORAGE_KEYS.PAYMENTS, JSON.stringify(inMemoryPayments));
-  } catch (err) {
-    console.warn('FixMate localStorage persist warning:', err);
-  }
-}
 
 const API_URL = (
   process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000'
@@ -196,41 +116,31 @@ export async function getServiceById(id: string): Promise<Service | null> {
    ========================================================= */
 
 /**
- * Get all bookings of a specific customer (or all if email omitted).
+ * Get all bookings of a specific customer.
  * Calls Express GET /api/bookings/my with Authorization: Bearer <getAuthToken()>.
  */
-export async function getMyBookings(customerEmail?: string): Promise<Booking[]> {
+export async function getMyBookings(_customerEmail?: string): Promise<Booking[]> {
   const token = await getAuthToken();
-
-  if (token) {
-    const res = await fetch(`${API_URL}/api/bookings/my`, {
-      headers: {
-        Authorization: `Bearer ${token}`,
-      },
-      cache: 'no-store',
-    });
-
-    if (res.ok) {
-      const data = await res.json();
-      return Array.isArray(data) ? data : [];
-    }
-
-    const errorData = await res.json().catch(() => ({}));
-    const err = new Error(errorData.message || `Failed to fetch bookings: ${res.statusText}`);
-    (err as unknown as { status: number }).status = res.status;
-    throw err;
+  if (!token) {
+    return [];
   }
 
-  // Fallback to in-memory if no token is available
-  await delay();
-  if (!customerEmail) {
-    return [...inMemoryBookings].sort(
-      (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
-    );
+  const res = await fetch(`${API_URL}/api/bookings/my`, {
+    headers: {
+      Authorization: `Bearer ${token}`,
+    },
+    cache: 'no-store',
+  });
+
+  if (res.ok) {
+    const data = await res.json();
+    return Array.isArray(data) ? data : [];
   }
-  return inMemoryBookings
-    .filter((b) => b.customerEmail.toLowerCase() === customerEmail.toLowerCase())
-    .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+
+  const errorData = await res.json().catch(() => ({}));
+  const err = new Error(errorData.message || `Failed to fetch bookings: ${res.statusText}`);
+  (err as unknown as { status: number }).status = res.status;
+  throw err;
 }
 
 /**
@@ -267,13 +177,7 @@ export async function createBooking(
     throw err;
   }
 
-  const created = resData.booking || resData;
-  if (created) {
-    inMemoryBookings.unshift(created);
-    persistStore();
-  }
-
-  return created;
+  return resData.booking || resData;
 }
 
 /**
@@ -282,64 +186,30 @@ export async function createBooking(
  */
 export async function cancelBooking(
   id: string,
-  customerEmail?: string
+  _customerEmail?: string
 ): Promise<Booking> {
   const token = await getAuthToken();
-
-  if (token) {
-    const res = await fetch(`${API_URL}/api/bookings/${id}/cancel`, {
-      method: 'PATCH',
-      headers: {
-        'Content-Type': 'application/json',
-        Authorization: `Bearer ${token}`,
-      },
-    });
-
-    const resData = await res.json().catch(() => ({}));
-
-    if (!res.ok) {
-      const err = new Error(resData.message || `Failed to cancel booking: ${res.statusText}`);
-      (err as unknown as { status: number }).status = res.status;
-      throw err;
-    }
-
-    const updated = resData.booking || resData;
-    const idx = inMemoryBookings.findIndex((b) => b._id === id);
-    if (idx !== -1 && updated) {
-      inMemoryBookings[idx] = updated;
-      persistStore();
-    }
-
-    return updated;
+  if (!token) {
+    throw new Error('Authentication required to cancel booking.');
   }
 
-  // Fallback to in-memory if no token is available
-  await delay();
+  const res = await fetch(`${API_URL}/api/bookings/${id}/cancel`, {
+    method: 'PATCH',
+    headers: {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${token}`,
+    },
+  });
 
-  const bookingIndex = inMemoryBookings.findIndex((b) => b._id === id);
-  if (bookingIndex === -1) {
-    throw new Error('Booking not found.');
+  const resData = await res.json().catch(() => ({}));
+
+  if (!res.ok) {
+    const err = new Error(resData.message || `Failed to cancel booking: ${res.statusText}`);
+    (err as unknown as { status: number }).status = res.status;
+    throw err;
   }
 
-  const booking = inMemoryBookings[bookingIndex];
-
-  if (customerEmail && booking.customerEmail.toLowerCase() !== customerEmail.toLowerCase()) {
-    throw new Error('You can only cancel your own bookings.');
-  }
-
-  if (booking.status !== 'requested') {
-    throw new Error('Only bookings with status "requested" can be cancelled.');
-  }
-
-  const updatedBooking: Booking = {
-    ...booking,
-    status: 'cancelled',
-  };
-
-  inMemoryBookings[bookingIndex] = updatedBooking;
-  persistStore();
-
-  return { ...updatedBooking };
+  return resData.booking || resData;
 }
 
 /* =========================================================
@@ -347,42 +217,35 @@ export async function cancelBooking(
    ========================================================= */
 
 /**
- * Get services belonging to a technician
+ * Get services belonging to the logged in technician.
  * Calls Express GET /api/services/my with Authorization: Bearer <getAuthToken()>.
  */
 export async function getTechnicianServices(
-  technicianEmail?: string
+  _technicianEmail?: string
 ): Promise<Service[]> {
   const token = await getAuthToken();
-
-  if (token) {
-    const res = await fetch(`${API_URL}/api/services/my`, {
-      headers: {
-        Authorization: `Bearer ${token}`,
-      },
-      cache: 'no-store',
-    });
-
-    if (res.ok) {
-      const data = await res.json();
-      return Array.isArray(data) ? data : [];
-    }
-
-    const errorData = await res.json().catch(() => ({}));
-    const err = new Error(
-      errorData.message || `Failed to fetch technician services: ${res.statusText}`
-    );
-    (err as unknown as { status: number }).status = res.status;
-    throw err;
+  if (!token) {
+    return [];
   }
 
-  await delay();
-  if (!technicianEmail) {
-    return [...inMemoryServices];
+  const res = await fetch(`${API_URL}/api/services/my`, {
+    headers: {
+      Authorization: `Bearer ${token}`,
+    },
+    cache: 'no-store',
+  });
+
+  if (res.ok) {
+    const data = await res.json();
+    return Array.isArray(data) ? data : [];
   }
-  return inMemoryServices
-    .filter((s) => s.technicianEmail.toLowerCase() === technicianEmail.toLowerCase())
-    .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+
+  const errorData = await res.json().catch(() => ({}));
+  const err = new Error(
+    errorData.message || `Failed to fetch technician services: ${res.statusText}`
+  );
+  (err as unknown as { status: number }).status = res.status;
+  throw err;
 }
 
 /**
@@ -393,58 +256,39 @@ export async function createService(
   serviceData: Omit<Service, '_id' | 'createdAt' | 'approvalStatus' | 'isAvailable'>
 ): Promise<Service> {
   const token = await getAuthToken();
-
-  if (token) {
-    const res = await fetch(`${API_URL}/api/services`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        Authorization: `Bearer ${token}`,
-      },
-      body: JSON.stringify({
-        title: serviceData.title,
-        category: serviceData.category,
-        description: serviceData.description,
-        image: serviceData.image,
-        basePrice: Number(serviceData.basePrice),
-        estimatedDuration: serviceData.estimatedDuration,
-        serviceMode: serviceData.serviceMode,
-        serviceArea: serviceData.serviceArea,
-      }),
-    });
-
-    const resData = await res.json().catch(() => ({}));
-
-    if (!res.ok) {
-      const err = new Error(
-        resData.message || `Failed to create service: ${res.statusText}`
-      );
-      (err as unknown as { status: number }).status = res.status;
-      throw err;
-    }
-
-    const created = resData.service || resData;
-    if (created) {
-      inMemoryServices.unshift(created);
-      persistStore();
-    }
-    return created;
+  if (!token) {
+    throw new Error('Authentication required to create service.');
   }
 
-  await delay();
+  const res = await fetch(`${API_URL}/api/services`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${token}`,
+    },
+    body: JSON.stringify({
+      title: serviceData.title,
+      category: serviceData.category,
+      description: serviceData.description,
+      image: serviceData.image,
+      basePrice: Number(serviceData.basePrice),
+      estimatedDuration: serviceData.estimatedDuration,
+      serviceMode: serviceData.serviceMode,
+      serviceArea: serviceData.serviceArea,
+    }),
+  });
 
-  const newService: Service = {
-    ...serviceData,
-    _id: `srv_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`,
-    approvalStatus: 'pending',
-    isAvailable: true,
-    createdAt: new Date().toISOString(),
-  };
+  const resData = await res.json().catch(() => ({}));
 
-  inMemoryServices.unshift(newService);
-  persistStore();
+  if (!res.ok) {
+    const err = new Error(
+      resData.message || `Failed to create service: ${res.statusText}`
+    );
+    (err as unknown as { status: number }).status = res.status;
+    throw err;
+  }
 
-  return { ...newService };
+  return resData.service || resData;
 }
 
 /**
@@ -456,343 +300,178 @@ export async function updateService(
   updates: Partial<Service>
 ): Promise<Service> {
   const token = await getAuthToken();
-
-  if (token) {
-    const payload: Record<string, unknown> = {};
-    if (updates.title !== undefined) payload.title = updates.title;
-    if (updates.category !== undefined) payload.category = updates.category;
-    if (updates.description !== undefined) payload.description = updates.description;
-    if (updates.image !== undefined) payload.image = updates.image;
-    if (updates.basePrice !== undefined) payload.basePrice = Number(updates.basePrice);
-    if (updates.estimatedDuration !== undefined) payload.estimatedDuration = updates.estimatedDuration;
-    if (updates.serviceMode !== undefined) payload.serviceMode = updates.serviceMode;
-    if (updates.serviceArea !== undefined) payload.serviceArea = updates.serviceArea;
-
-    const res = await fetch(`${API_URL}/api/services/${id}`, {
-      method: 'PATCH',
-      headers: {
-        'Content-Type': 'application/json',
-        Authorization: `Bearer ${token}`,
-      },
-      body: JSON.stringify(payload),
-    });
-
-    const resData = await res.json().catch(() => ({}));
-
-    if (!res.ok) {
-      const err = new Error(
-        resData.message || `Failed to update service: ${res.statusText}`
-      );
-      (err as unknown as { status: number }).status = res.status;
-      throw err;
-    }
-
-    const updated = resData.service || resData;
-    const index = inMemoryServices.findIndex((s) => s._id === id);
-    if (index !== -1 && updated) {
-      inMemoryServices[index] = updated;
-      persistStore();
-    }
-    return updated;
+  if (!token) {
+    throw new Error('Authentication required to update service.');
   }
 
-  await delay();
+  const payload: Record<string, unknown> = {};
+  if (updates.title !== undefined) payload.title = updates.title;
+  if (updates.category !== undefined) payload.category = updates.category;
+  if (updates.description !== undefined) payload.description = updates.description;
+  if (updates.image !== undefined) payload.image = updates.image;
+  if (updates.basePrice !== undefined) payload.basePrice = Number(updates.basePrice);
+  if (updates.estimatedDuration !== undefined) payload.estimatedDuration = updates.estimatedDuration;
+  if (updates.serviceMode !== undefined) payload.serviceMode = updates.serviceMode;
+  if (updates.serviceArea !== undefined) payload.serviceArea = updates.serviceArea;
 
-  const index = inMemoryServices.findIndex((s) => s._id === id);
-  if (index === -1) {
-    throw new Error('Service not found.');
-  }
+  const res = await fetch(`${API_URL}/api/services/${id}`, {
+    method: 'PATCH',
+    headers: {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${token}`,
+    },
+    body: JSON.stringify(payload),
+  });
 
-  const updated: Service = {
-    ...inMemoryServices[index],
-    ...updates,
-    approvalStatus: 'pending', // Reverts to pending on edit per requirements
-  };
+  const resData = await res.json().catch(() => ({}));
 
-  inMemoryServices[index] = updated;
-  persistStore();
-
-  return { ...updated };
-}
-
-/**
- * Delete service
- * Calls Express DELETE /api/services/:id with Authorization: Bearer <getAuthToken()>.
- */
-export async function deleteService(id: string): Promise<boolean> {
-  const token = await getAuthToken();
-
-  if (token) {
-    const res = await fetch(`${API_URL}/api/services/${id}`, {
-      method: 'DELETE',
-      headers: {
-        Authorization: `Bearer ${token}`,
-      },
-    });
-
-    const resData = await res.json().catch(() => ({}));
-
-    if (!res.ok) {
-      const err = new Error(
-        resData.message || `Failed to delete service: ${res.statusText}`
-      );
-      (err as unknown as { status: number }).status = res.status;
-      throw err;
-    }
-
-    const index = inMemoryServices.findIndex((s) => s._id === id);
-    if (index !== -1) {
-      inMemoryServices.splice(index, 1);
-      persistStore();
-    }
-    return true;
-  }
-
-  await delay();
-
-  const index = inMemoryServices.findIndex((s) => s._id === id);
-  if (index === -1) {
-    throw new Error('Service not found.');
-  }
-
-  inMemoryServices.splice(index, 1);
-  persistStore();
-
-  return true;
-}
-
-/**
- * Toggle availability of a service (must NOT reset approvalStatus)
- * Calls Express PATCH /api/services/:id/availability with Authorization: Bearer <getAuthToken()>.
- */
-export async function toggleAvailability(id: string): Promise<Service> {
-  const token = await getAuthToken();
-
-  if (token) {
-    const res = await fetch(`${API_URL}/api/services/${id}/availability`, {
-      method: 'PATCH',
-      headers: {
-        'Content-Type': 'application/json',
-        Authorization: `Bearer ${token}`,
-      },
-      body: JSON.stringify({}),
-    });
-
-    const resData = await res.json().catch(() => ({}));
-
-    if (!res.ok) {
-      const err = new Error(
-        resData.message || `Failed to toggle availability: ${res.statusText}`
-      );
-      (err as unknown as { status: number }).status = res.status;
-      throw err;
-    }
-
-    const updated = resData.service || resData;
-    const index = inMemoryServices.findIndex((s) => s._id === id);
-    if (index !== -1 && updated) {
-      inMemoryServices[index] = updated;
-      persistStore();
-    }
-    return updated;
-  }
-
-  await delay();
-
-  const index = inMemoryServices.findIndex((s) => s._id === id);
-  if (index === -1) {
-    throw new Error('Service not found.');
-  }
-
-  const existing = inMemoryServices[index];
-  const updated: Service = {
-    ...existing,
-    isAvailable: !existing.isAvailable,
-  };
-
-  inMemoryServices[index] = updated;
-  persistStore();
-
-  return { ...updated };
-}
-
-/**
- * Get bookings assigned to a technician
- * Calls Express GET /api/bookings/technician with Authorization: Bearer <getAuthToken()>.
- */
-export async function getTechnicianBookings(
-  technicianEmail?: string,
-  statusFilter?: string
-): Promise<Booking[]> {
-  const token = await getAuthToken();
-
-  if (token) {
-    const query = new URLSearchParams();
-    if (statusFilter && statusFilter !== 'all') {
-      query.set('status', statusFilter);
-    }
-    const queryString = query.toString();
-    const url = `${API_URL}/api/bookings/technician${queryString ? `?${queryString}` : ''}`;
-
-    const res = await fetch(url, {
-      headers: {
-        Authorization: `Bearer ${token}`,
-      },
-      cache: 'no-store',
-    });
-
-    if (res.ok) {
-      const data = await res.json();
-      return Array.isArray(data) ? data : [];
-    }
-
-    const errorData = await res.json().catch(() => ({}));
+  if (!res.ok) {
     const err = new Error(
-      errorData.message || `Failed to fetch technician requests: ${res.statusText}`
+      resData.message || `Failed to update service: ${res.statusText}`
     );
     (err as unknown as { status: number }).status = res.status;
     throw err;
   }
 
-  await delay();
-  let list = inMemoryBookings;
-  if (technicianEmail) {
-    list = list.filter(
-      (b) => b.technicianEmail.toLowerCase() === technicianEmail.toLowerCase()
-    );
-  }
-  if (statusFilter && statusFilter !== 'all') {
-    list = list.filter((b) => b.status === statusFilter);
-  }
-  return list.sort(
-    (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
-  );
+  return resData.service || resData;
 }
 
 /**
- * Status Pipeline transitions map:
- * - requested -> accepted | rejected: technician
- * - requested -> cancelled: customer
- * - accepted -> in-progress: technician
- * - in-progress -> completed: technician (finalAmount > 0 required)
- * - rejected / cancelled / completed: final states (completed only changes paymentStatus)
- *
+ * Delete own service
+ * Calls Express DELETE /api/services/:id with Authorization: Bearer <getAuthToken()>.
+ */
+export async function deleteService(id: string): Promise<boolean> {
+  const token = await getAuthToken();
+  if (!token) {
+    throw new Error('Authentication required to delete service.');
+  }
+
+  const res = await fetch(`${API_URL}/api/services/${id}`, {
+    method: 'DELETE',
+    headers: {
+      Authorization: `Bearer ${token}`,
+    },
+  });
+
+  if (!res.ok) {
+    const resData = await res.json().catch(() => ({}));
+    const err = new Error(
+      resData.message || `Failed to delete service: ${res.statusText}`
+    );
+    (err as unknown as { status: number }).status = res.status;
+    throw err;
+  }
+
+  return true;
+}
+
+/**
+ * Toggle availability of a service (does NOT reset approvalStatus).
+ * Calls Express PATCH /api/services/:id/availability with Authorization: Bearer <getAuthToken()>.
+ */
+export async function toggleAvailability(id: string): Promise<Service> {
+  const token = await getAuthToken();
+  if (!token) {
+    throw new Error('Authentication required to toggle availability.');
+  }
+
+  const res = await fetch(`${API_URL}/api/services/${id}/availability`, {
+    method: 'PATCH',
+    headers: {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${token}`,
+    },
+  });
+
+  const resData = await res.json().catch(() => ({}));
+
+  if (!res.ok) {
+    const err = new Error(
+      resData.message || `Failed to toggle service availability: ${res.statusText}`
+    );
+    (err as unknown as { status: number }).status = res.status;
+    throw err;
+  }
+
+  return resData.service || resData;
+}
+
+/**
+ * Get bookings for the logged-in technician.
+ * Calls Express GET /api/bookings/technician?status= with Authorization: Bearer <getAuthToken()>.
+ */
+export async function getTechnicianBookings(
+  statusFilter?: string,
+  _technicianEmail?: string
+): Promise<Booking[]> {
+  const token = await getAuthToken();
+  if (!token) {
+    return [];
+  }
+
+  const query =
+    statusFilter && statusFilter !== 'all' && !statusFilter.includes('@')
+      ? `?status=${encodeURIComponent(statusFilter)}`
+      : '';
+  const res = await fetch(`${API_URL}/api/bookings/technician${query}`, {
+    headers: {
+      Authorization: `Bearer ${token}`,
+    },
+    cache: 'no-store',
+  });
+
+  if (res.ok) {
+    const data = await res.json();
+    return Array.isArray(data) ? data : [];
+  }
+
+  const errorData = await res.json().catch(() => ({}));
+  const err = new Error(
+    errorData.message || `Failed to fetch technician requests: ${res.statusText}`
+  );
+  (err as unknown as { status: number }).status = res.status;
+  throw err;
+}
+
+/**
+ * Update booking status adhering to the job status pipeline.
  * Calls Express PATCH /api/bookings/:id/status with Authorization: Bearer <getAuthToken()>.
  */
 export async function updateBookingStatus(
   id: string,
-  nextStatus: BookingStatus,
-  options?: {
-    finalAmount?: number;
-    technicianEmail?: string;
-    customerEmail?: string;
-  }
+  newStatus: BookingStatus,
+  extra?: { finalAmount?: number; technicianEmail?: string }
 ): Promise<Booking> {
   const token = await getAuthToken();
-
-  if (token) {
-    const payload: { status: string; finalAmount?: number } = {
-      status: nextStatus,
-    };
-    if (options?.finalAmount !== undefined) {
-      payload.finalAmount = Number(options.finalAmount);
-    }
-
-    const res = await fetch(`${API_URL}/api/bookings/${id}/status`, {
-      method: 'PATCH',
-      headers: {
-        'Content-Type': 'application/json',
-        Authorization: `Bearer ${token}`,
-      },
-      body: JSON.stringify(payload),
-    });
-
-    const resData = await res.json().catch(() => ({}));
-
-    if (!res.ok) {
-      const err = new Error(
-        resData.message || `Failed to update job status: ${res.statusText}`
-      );
-      (err as unknown as { status: number }).status = res.status;
-      throw err;
-    }
-
-    const updated = resData.booking || resData;
-    const index = inMemoryBookings.findIndex((b) => b._id === id);
-    if (index !== -1 && updated) {
-      inMemoryBookings[index] = updated;
-      persistStore();
-    }
-    return updated;
+  if (!token) {
+    throw new Error('Authentication required to update booking status.');
   }
 
-  await delay();
-
-  const index = inMemoryBookings.findIndex((b) => b._id === id);
-  if (index === -1) {
-    throw new Error('Booking not found.');
+  const payload: Record<string, unknown> = { status: newStatus };
+  if (extra?.finalAmount !== undefined) {
+    payload.finalAmount = Number(extra.finalAmount);
   }
 
-  const booking = inMemoryBookings[index];
-  const current = booking.status;
+  const res = await fetch(`${API_URL}/api/bookings/${id}/status`, {
+    method: 'PATCH',
+    headers: {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${token}`,
+    },
+    body: JSON.stringify(payload),
+  });
 
-  // Strict Pipeline Transitions Validation
-  const validTransitions: Record<BookingStatus, BookingStatus[]> = {
-    requested: ['accepted', 'rejected', 'cancelled'],
-    accepted: ['in-progress'],
-    'in-progress': ['completed'],
-    completed: [],
-    rejected: [],
-    cancelled: [],
-  };
+  const resData = await res.json().catch(() => ({}));
 
-  if (!validTransitions[current]?.includes(nextStatus)) {
-    throw new Error(
-      `Invalid status transition from "${current}" to "${nextStatus}".`
+  if (!res.ok) {
+    const err = new Error(
+      resData.message || `Failed to transition booking status: ${res.statusText}`
     );
+    (err as unknown as { status: number }).status = res.status;
+    throw err;
   }
 
-  // Authorization checks
-  if (nextStatus === 'cancelled') {
-    if (
-      options?.customerEmail &&
-      booking.customerEmail.toLowerCase() !== options.customerEmail.toLowerCase()
-    ) {
-      throw new Error('Only the customer who requested this booking can cancel it.');
-    }
-  } else {
-    // Technician actions: accepted, rejected, in-progress, completed
-    if (
-      options?.technicianEmail &&
-      booking.technicianEmail.toLowerCase() !== options.technicianEmail.toLowerCase()
-    ) {
-      throw new Error('Only the assigned technician can update this job.');
-    }
-  }
-
-  // Completion requirement: finalAmount > 0
-  let finalAmount = booking.finalAmount;
-  if (nextStatus === 'completed') {
-    if (options?.finalAmount !== undefined) {
-      if (typeof options.finalAmount !== 'number' || options.finalAmount <= 0) {
-        throw new Error('Final amount must be a positive number.');
-      }
-      finalAmount = options.finalAmount;
-    } else if (finalAmount <= 0) {
-      finalAmount = booking.basePrice;
-    }
-  }
-
-  const updated: Booking = {
-    ...booking,
-    status: nextStatus,
-    finalAmount,
-  };
-
-  inMemoryBookings[index] = updated;
-  persistStore();
-
-  return { ...updated };
+  return resData.booking || resData;
 }
 
 /* =========================================================
@@ -805,36 +484,31 @@ export async function updateBookingStatus(
  */
 export async function getAdminUsers(): Promise<User[]> {
   const token = await getAuthToken();
-
-  if (token) {
-    const res = await fetch(`${API_URL}/api/admin/users`, {
-      headers: {
-        Authorization: `Bearer ${token}`,
-      },
-      cache: 'no-store',
-    });
-
-    if (res.ok) {
-      const data = await res.json();
-      return (Array.isArray(data) ? data : []).map((u: any) => ({
-        ...u,
-        _id: String(u._id || u.id || ''),
-      }));
-    }
-
-    const errorData = await res.json().catch(() => ({}));
-    const err = new Error(
-      errorData.message || `Failed to fetch users: ${res.statusText}`
-    );
-    (err as unknown as { status: number }).status = res.status;
-    throw err;
+  if (!token) {
+    return [];
   }
 
-  // Fallback to in-memory if no token
-  await delay();
-  return [...inMemoryUsers].sort(
-    (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
+  const res = await fetch(`${API_URL}/api/admin/users`, {
+    headers: {
+      Authorization: `Bearer ${token}`,
+    },
+    cache: 'no-store',
+  });
+
+  if (res.ok) {
+    const data = await res.json();
+    return (Array.isArray(data) ? data : []).map((u: any) => ({
+      ...u,
+      _id: String(u._id || u.id || ''),
+    }));
+  }
+
+  const errorData = await res.json().catch(() => ({}));
+  const err = new Error(
+    errorData.message || `Failed to fetch users: ${res.statusText}`
   );
+  (err as unknown as { status: number }).status = res.status;
+  throw err;
 }
 
 /**
@@ -844,58 +518,37 @@ export async function getAdminUsers(): Promise<User[]> {
 export async function changeUserRole(
   userId: string,
   newRole: UserRole,
-  currentUserId?: string
+  _currentUserId?: string
 ): Promise<User> {
   const token = await getAuthToken();
-
-  if (token) {
-    const res = await fetch(`${API_URL}/api/admin/users/${userId}/role`, {
-      method: 'PATCH',
-      headers: {
-        'Content-Type': 'application/json',
-        Authorization: `Bearer ${token}`,
-      },
-      body: JSON.stringify({ role: newRole }),
-    });
-
-    const resData = await res.json().catch(() => ({}));
-
-    if (!res.ok) {
-      const err = new Error(
-        resData.message || `Failed to update user role: ${res.statusText}`
-      );
-      (err as unknown as { status: number }).status = res.status;
-      throw err;
-    }
-
-    const user = resData.user || resData;
-    return {
-      ...user,
-      _id: String(user._id || user.id || userId),
-    };
+  if (!token) {
+    throw new Error('Authentication required to change user role.');
   }
 
-  // Fallback to in-memory if no token
-  await delay();
+  const res = await fetch(`${API_URL}/api/admin/users/${userId}/role`, {
+    method: 'PATCH',
+    headers: {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${token}`,
+    },
+    body: JSON.stringify({ role: newRole }),
+  });
 
-  if (currentUserId && userId === currentUserId) {
-    throw new Error('You cannot change your own administrative role.');
+  const resData = await res.json().catch(() => ({}));
+
+  if (!res.ok) {
+    const err = new Error(
+      resData.message || `Failed to update user role: ${res.statusText}`
+    );
+    (err as unknown as { status: number }).status = res.status;
+    throw err;
   }
 
-  const index = inMemoryUsers.findIndex((u) => u._id === userId);
-  if (index === -1) {
-    throw new Error('User not found.');
-  }
-
-  const updated: User = {
-    ...inMemoryUsers[index],
-    role: newRole,
+  const user = resData.user || resData;
+  return {
+    ...user,
+    _id: String(user._id || user.id || userId),
   };
-
-  inMemoryUsers[index] = updated;
-  persistStore();
-
-  return { ...updated };
 }
 
 /**
@@ -906,46 +559,32 @@ export async function getAdminServices(
   filter: 'all' | 'pending' | 'approved' | 'rejected' = 'all'
 ): Promise<Service[]> {
   const token = await getAuthToken();
-
-  if (token) {
-    const query = filter && filter !== 'all' ? `?status=${encodeURIComponent(filter)}` : '';
-    const res = await fetch(`${API_URL}/api/admin/services${query}`, {
-      headers: {
-        Authorization: `Bearer ${token}`,
-      },
-      cache: 'no-store',
-    });
-
-    if (res.ok) {
-      const data = await res.json();
-      return (Array.isArray(data) ? data : []).map((s: any) => ({
-        ...s,
-        _id: String(s._id || s.id || ''),
-      }));
-    }
-
-    const errorData = await res.json().catch(() => ({}));
-    const err = new Error(
-      errorData.message || `Failed to fetch services for moderation: ${res.statusText}`
-    );
-    (err as unknown as { status: number }).status = res.status;
-    throw err;
+  if (!token) {
+    return [];
   }
 
-  // Fallback to in-memory if no token
-  await delay();
-
-  let list = [...inMemoryServices];
-  if (filter !== 'all') {
-    list = list.filter((s) => s.approvalStatus === filter);
-  }
-
-  // Pending first, then newest
-  return list.sort((a, b) => {
-    if (a.approvalStatus === 'pending' && b.approvalStatus !== 'pending') return -1;
-    if (a.approvalStatus !== 'pending' && b.approvalStatus === 'pending') return 1;
-    return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
+  const query = filter && filter !== 'all' ? `?status=${encodeURIComponent(filter)}` : '';
+  const res = await fetch(`${API_URL}/api/admin/services${query}`, {
+    headers: {
+      Authorization: `Bearer ${token}`,
+    },
+    cache: 'no-store',
   });
+
+  if (res.ok) {
+    const data = await res.json();
+    return (Array.isArray(data) ? data : []).map((s: any) => ({
+      ...s,
+      _id: String(s._id || s.id || ''),
+    }));
+  }
+
+  const errorData = await res.json().catch(() => ({}));
+  const err = new Error(
+    errorData.message || `Failed to fetch services for moderation: ${res.statusText}`
+  );
+  (err as unknown as { status: number }).status = res.status;
+  throw err;
 }
 
 /**
@@ -957,147 +596,105 @@ export async function setApproval(
   status: 'approved' | 'rejected'
 ): Promise<Service> {
   const token = await getAuthToken();
-
-  if (token) {
-    const res = await fetch(`${API_URL}/api/admin/services/${serviceId}/approval`, {
-      method: 'PATCH',
-      headers: {
-        'Content-Type': 'application/json',
-        Authorization: `Bearer ${token}`,
-      },
-      body: JSON.stringify({ approvalStatus: status }),
-    });
-
-    const resData = await res.json().catch(() => ({}));
-
-    if (!res.ok) {
-      const err = new Error(
-        resData.message || `Failed to update service approval status: ${res.statusText}`
-      );
-      (err as unknown as { status: number }).status = res.status;
-      throw err;
-    }
-
-    const service = resData.service || resData;
-    return {
-      ...service,
-      _id: String(service._id || service.id || serviceId),
-    };
+  if (!token) {
+    throw new Error('Authentication required to moderate service.');
   }
 
-  // Fallback to in-memory if no token
-  await delay();
+  const res = await fetch(`${API_URL}/api/admin/services/${serviceId}/approval`, {
+    method: 'PATCH',
+    headers: {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${token}`,
+    },
+    body: JSON.stringify({ approvalStatus: status }),
+  });
 
-  const index = inMemoryServices.findIndex((s) => s._id === serviceId);
-  if (index === -1) {
-    throw new Error('Service not found.');
+  const resData = await res.json().catch(() => ({}));
+
+  if (!res.ok) {
+    const err = new Error(
+      resData.message || `Failed to update service approval status: ${res.statusText}`
+    );
+    (err as unknown as { status: number }).status = res.status;
+    throw err;
   }
 
-  const updated: Service = {
-    ...inMemoryServices[index],
-    approvalStatus: status,
+  const service = resData.service || resData;
+  return {
+    ...service,
+    _id: String(service._id || service.id || serviceId),
   };
-
-  inMemoryServices[index] = updated;
-  persistStore();
-
-  return { ...updated };
 }
 
 /**
- * Get all platform bookings for admin monitoring.
+ * Get all platform bookings for admin oversight.
  * Calls Express GET /api/admin/bookings?status= with Authorization: Bearer <getAuthToken()>.
  */
 export async function getAdminBookings(statusFilter?: string): Promise<Booking[]> {
   const token = await getAuthToken();
-
-  if (token) {
-    const query =
-      statusFilter && statusFilter !== 'all'
-        ? `?status=${encodeURIComponent(statusFilter)}`
-        : '';
-    const res = await fetch(`${API_URL}/api/admin/bookings${query}`, {
-      headers: {
-        Authorization: `Bearer ${token}`,
-      },
-      cache: 'no-store',
-    });
-
-    if (res.ok) {
-      const data = await res.json();
-      return (Array.isArray(data) ? data : []).map((b: any) => ({
-        ...b,
-        _id: String(b._id || b.id || ''),
-      }));
-    }
-
-    const errorData = await res.json().catch(() => ({}));
-    const err = new Error(
-      errorData.message || `Failed to fetch platform bookings: ${res.statusText}`
-    );
-    (err as unknown as { status: number }).status = res.status;
-    throw err;
+  if (!token) {
+    return [];
   }
 
-  // Fallback to in-memory if no token
-  await delay();
+  const query = statusFilter && statusFilter !== 'all' ? `?status=${encodeURIComponent(statusFilter)}` : '';
+  const res = await fetch(`${API_URL}/api/admin/bookings${query}`, {
+    headers: {
+      Authorization: `Bearer ${token}`,
+    },
+    cache: 'no-store',
+  });
 
-  let list = [...inMemoryBookings];
-  if (statusFilter && statusFilter !== 'all') {
-    list = list.filter((b) => b.status === statusFilter);
+  if (res.ok) {
+    const data = await res.json();
+    return (Array.isArray(data) ? data : []).map((b: any) => ({
+      ...b,
+      _id: String(b._id || b.id || ''),
+    }));
   }
 
-  return list.sort(
-    (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
+  const errorData = await res.json().catch(() => ({}));
+  const err = new Error(
+    errorData.message || `Failed to fetch administrative bookings: ${res.statusText}`
   );
+  (err as unknown as { status: number }).status = res.status;
+  throw err;
 }
 
 /**
- * Get all transactions with platform totalRevenue for Admin monitoring.
+ * Get all system transaction records + aggregate revenue for admin ledger.
  * Calls Express GET /api/admin/payments with Authorization: Bearer <getAuthToken()>.
  */
 export async function getAdminPayments(): Promise<{ payments: Payment[]; totalRevenue: number }> {
   const token = await getAuthToken();
-
-  if (token) {
-    const res = await fetch(`${API_URL}/api/admin/payments`, {
-      headers: {
-        Authorization: `Bearer ${token}`,
-      },
-      cache: 'no-store',
-    });
-
-    if (res.ok) {
-      const data = await res.json();
-      const payments = (Array.isArray(data?.payments) ? data.payments : []).map(
-        (p: any) => ({
-          ...p,
-          _id: String(p._id || p.id || ''),
-        })
-      );
-      const totalRevenue =
-        typeof data?.totalRevenue === 'number'
-          ? data.totalRevenue
-          : payments.reduce((sum: number, p: Payment) => sum + (Number(p.amount) || 0), 0);
-
-      return { payments, totalRevenue };
-    }
-
-    const errorData = await res.json().catch(() => ({}));
-    const err = new Error(
-      errorData.message || `Failed to fetch admin transactions: ${res.statusText}`
-    );
-    (err as unknown as { status: number }).status = res.status;
-    throw err;
+  if (!token) {
+    return { payments: [], totalRevenue: 0 };
   }
 
-  // Fallback to in-memory if no token
-  await delay();
-  const payments = [...inMemoryPayments].sort(
-    (a, b) => new Date(b.paidAt).getTime() - new Date(a.paidAt).getTime()
+  const res = await fetch(`${API_URL}/api/admin/payments`, {
+    headers: {
+      Authorization: `Bearer ${token}`,
+    },
+    cache: 'no-store',
+  });
+
+  if (res.ok) {
+    const data = await res.json();
+    const payments = Array.isArray(data.payments)
+      ? data.payments.map((p: any) => ({
+          ...p,
+          _id: String(p._id || p.id || ''),
+        }))
+      : [];
+    const totalRevenue = typeof data.totalRevenue === 'number' ? data.totalRevenue : 0;
+    return { payments, totalRevenue };
+  }
+
+  const errorData = await res.json().catch(() => ({}));
+  const err = new Error(
+    errorData.message || `Failed to fetch administrative payments: ${res.statusText}`
   );
-  const totalRevenue = payments.reduce((sum, p) => sum + (p.amount || 0), 0);
-  return { payments, totalRevenue };
+  (err as unknown as { status: number }).status = res.status;
+  throw err;
 }
 
 /* =========================================================
@@ -1105,62 +702,33 @@ export async function getAdminPayments(): Promise<{ payments: Payment[]; totalRe
    ========================================================= */
 
 /**
- * Get payments (for customer history or admin all transactions).
+ * Get customer's verified payments history.
  * Calls Express GET /api/payments/my with Authorization: Bearer <getAuthToken()>.
- * If called by admin (or /api/payments/my returns 403), seamlessly queries /api/admin/payments.
  */
-export async function getPayments(customerEmail?: string): Promise<Payment[]> {
+export async function getPayments(_customerEmail?: string): Promise<Payment[]> {
   const token = await getAuthToken();
-
-  if (token) {
-    const res = await fetch(`${API_URL}/api/payments/my`, {
-      headers: {
-        Authorization: `Bearer ${token}`,
-      },
-      cache: 'no-store',
-    });
-
-    if (res.ok) {
-      const data = await res.json();
-      return Array.isArray(data) ? data : [];
-    }
-
-    // If 403 Forbidden and no customerEmail specified, user may be Admin viewing transactions
-    if (res.status === 403 && !customerEmail) {
-      try {
-        const adminRes = await fetch(`${API_URL}/api/admin/payments`, {
-          headers: {
-            Authorization: `Bearer ${token}`,
-          },
-          cache: 'no-store',
-        });
-        if (adminRes.ok) {
-          const adminData = await adminRes.json();
-          return Array.isArray(adminData?.payments) ? adminData.payments : [];
-        }
-      } catch {
-        // Fall through to error handling or in-memory
-      }
-    }
-
-    const errorData = await res.json().catch(() => ({}));
-    const err = new Error(errorData.message || `Failed to fetch payment history: ${res.statusText}`);
-    (err as unknown as { status: number }).status = res.status;
-    throw err;
+  if (!token) {
+    return [];
   }
 
-  // Fallback to in-memory if no token
-  await delay();
+  const res = await fetch(`${API_URL}/api/payments/my`, {
+    headers: {
+      Authorization: `Bearer ${token}`,
+    },
+    cache: 'no-store',
+  });
 
-  if (!customerEmail) {
-    return [...inMemoryPayments].sort(
-      (a, b) => new Date(b.paidAt).getTime() - new Date(a.paidAt).getTime()
-    );
+  if (res.ok) {
+    const data = await res.json();
+    return Array.isArray(data) ? data : [];
   }
 
-  return inMemoryPayments
-    .filter((p) => p.customerEmail.toLowerCase() === customerEmail.toLowerCase())
-    .sort((a, b) => new Date(b.paidAt).getTime() - new Date(a.paidAt).getTime());
+  const errorData = await res.json().catch(() => ({}));
+  const err = new Error(
+    errorData.message || `Failed to fetch payment history: ${res.statusText}`
+  );
+  (err as unknown as { status: number }).status = res.status;
+  throw err;
 }
 
 /**
@@ -1226,55 +794,8 @@ export async function verifyPaymentSession(
   return resData;
 }
 
-/**
- * Mock Pay Now for Phase 1 frontend testing
- * (replaced by Stripe Checkout in Phase 3)
- */
-export async function mockPayBooking(bookingId: string): Promise<Payment> {
-  await delay();
-
-  const index = inMemoryBookings.findIndex((b) => b._id === bookingId);
-  if (index === -1) {
-    throw new Error('Booking not found.');
-  }
-
-  const booking = inMemoryBookings[index];
-  if (booking.status !== 'completed') {
-    throw new Error('Payment can only be processed for completed repairs.');
-  }
-
-  if (booking.paymentStatus === 'paid') {
-    throw new Error('This booking is already paid.');
-  }
-
-  // Update booking paymentStatus
-  booking.paymentStatus = 'paid';
-  inMemoryBookings[index] = { ...booking };
-
-  const newPayment: Payment = {
-    _id: `pmt_${Date.now()}`,
-    bookingId: booking._id,
-    serviceTitle: booking.serviceTitle,
-    customerName: booking.customerName,
-    customerEmail: booking.customerEmail,
-    technicianName: booking.technicianName,
-    technicianEmail: booking.technicianEmail,
-    amount: booking.finalAmount,
-    currency: 'usd',
-    transactionId: `txn_mock_${Math.random().toString(36).substring(2, 11)}`,
-    stripeSessionId: `cs_mock_${Math.random().toString(36).substring(2, 16)}`,
-    paymentStatus: 'paid',
-    paidAt: new Date().toISOString(),
-  };
-
-  inMemoryPayments.unshift(newPayment);
-  persistStore();
-
-  return { ...newPayment };
-}
-
 /* =========================================================
-   USER PROFILE
+   USER PROFILE FUNCTIONS
    ========================================================= */
 
 /**
@@ -1283,70 +804,45 @@ export async function mockPayBooking(bookingId: string): Promise<Payment> {
  * Only name, phone, area, bio, and image are modified. Email and role are immutable.
  */
 export async function updateUserProfile(
-  email: string,
+  _email: string,
   updates: Partial<User>
 ): Promise<User> {
   const token = await getAuthToken();
-
-  if (token) {
-    const payload: Record<string, string> = {};
-    if (updates.name !== undefined) payload.name = updates.name.trim();
-    if (updates.phone !== undefined) payload.phone = updates.phone.trim();
-    if (updates.area !== undefined) payload.area = updates.area.trim();
-    if (updates.bio !== undefined) payload.bio = updates.bio.trim();
-    if (updates.image !== undefined) payload.image = updates.image.trim();
-
-    const res = await fetch(`${API_URL}/api/users/profile`, {
-      method: 'PATCH',
-      headers: {
-        'Content-Type': 'application/json',
-        Authorization: `Bearer ${token}`,
-      },
-      body: JSON.stringify(payload),
-    });
-
-    const resData = await res.json().catch(() => ({}));
-
-    if (!res.ok) {
-      const err = new Error(
-        resData.message || `Failed to update profile: ${res.statusText}`
-      );
-      (err as unknown as { status: number }).status = res.status;
-      throw err;
-    }
-
-    const user = resData.user || resData;
-    return {
-      ...user,
-      _id: String(user._id || user.id || ''),
-    };
+  if (!token) {
+    throw new Error('Authentication required to update profile.');
   }
 
-  // Fallback to in-memory if no token
-  await delay();
+  const payload: Record<string, string> = {};
+  if (updates.name !== undefined) payload.name = updates.name.trim();
+  if (updates.phone !== undefined) payload.phone = updates.phone.trim();
+  if (updates.area !== undefined) payload.area = updates.area.trim();
+  if (updates.bio !== undefined) payload.bio = updates.bio.trim();
+  if (updates.image !== undefined) payload.image = updates.image.trim();
 
-  const index = inMemoryUsers.findIndex(
-    (u) => u.email.toLowerCase() === email.toLowerCase()
-  );
-  if (index === -1) {
-    throw new Error('User not found.');
+  const res = await fetch(`${API_URL}/api/users/profile`, {
+    method: 'PATCH',
+    headers: {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${token}`,
+    },
+    body: JSON.stringify(payload),
+  });
+
+  const resData = await res.json().catch(() => ({}));
+
+  if (!res.ok) {
+    const err = new Error(
+      resData.message || `Failed to update profile: ${res.statusText}`
+    );
+    (err as unknown as { status: number }).status = res.status;
+    throw err;
   }
 
-  // Email and role are immutable via profile update
-  const sanitized = { ...updates };
-  delete sanitized.email;
-  delete sanitized.role;
-  delete sanitized._id;
-
-  const updated: User = {
-    ...inMemoryUsers[index],
-    ...sanitized,
+  const user = resData.user || resData;
+  return {
+    ...user,
+    _id: String(user._id || user.id || ''),
   };
-
-  inMemoryUsers[index] = updated;
-  persistStore();
-
-  return { ...updated };
 }
 
 /* =========================================================
@@ -1359,56 +855,38 @@ export async function updateUserProfile(
  */
 export async function getCustomerStats(): Promise<CustomerStats> {
   const token = await getAuthToken();
-
-  if (token) {
-    const res = await fetch(`${API_URL}/api/customer/stats`, {
-      headers: {
-        Authorization: `Bearer ${token}`,
-      },
-      cache: 'no-store',
-    });
-
-    if (res.ok) {
-      const data = await res.json();
-      return {
-        totalRequests: data.totalRequests ?? data.total ?? 0,
-        activeJobs: data.activeJobs ?? data.active ?? 0,
-        completedJobs: data.completedJobs ?? data.completed ?? 0,
-        totalSpent: data.totalSpent ?? 0,
-        chartData: Array.isArray(data.chartData) ? data.chartData : [],
-      };
-    }
-
-    const errorData = await res.json().catch(() => ({}));
-    const err = new Error(errorData.message || `Failed to fetch customer stats: ${res.statusText}`);
-    (err as unknown as { status: number }).status = res.status;
-    throw err;
+  if (!token) {
+    return {
+      totalRequests: 0,
+      activeJobs: 0,
+      completedJobs: 0,
+      totalSpent: 0,
+      chartData: [],
+    };
   }
 
-  // Fallback to in-memory if no token
-  await delay();
-  const totalRequests = inMemoryBookings.length;
-  const activeJobs = inMemoryBookings.filter((b) =>
-    ['requested', 'accepted', 'in-progress'].includes(b.status)
-  ).length;
-  const completedJobs = inMemoryBookings.filter((b) => b.status === 'completed').length;
-  const totalSpent = inMemoryPayments.reduce((sum, p) => sum + p.amount, 0);
+  const res = await fetch(`${API_URL}/api/customer/stats`, {
+    headers: {
+      Authorization: `Bearer ${token}`,
+    },
+    cache: 'no-store',
+  });
 
-  const chartData = [
-    { month: 'Oct', requests: 1, spent: 75 },
-    { month: 'Nov', requests: 2, spent: 155 },
-    { month: 'Dec', requests: 1, spent: 90 },
-    { month: 'Jan', requests: 3, spent: 220 },
-    { month: 'Feb', requests: Math.max(1, totalRequests), spent: Math.max(50, totalSpent) },
-  ];
+  if (res.ok) {
+    const data = await res.json();
+    return {
+      totalRequests: data.totalRequests ?? data.total ?? 0,
+      activeJobs: data.activeJobs ?? data.active ?? 0,
+      completedJobs: data.completedJobs ?? data.completed ?? 0,
+      totalSpent: data.totalSpent ?? 0,
+      chartData: Array.isArray(data.chartData) ? data.chartData : [],
+    };
+  }
 
-  return {
-    totalRequests,
-    activeJobs,
-    completedJobs,
-    totalSpent,
-    chartData,
-  };
+  const errorData = await res.json().catch(() => ({}));
+  const err = new Error(errorData.message || `Failed to fetch customer stats: ${res.statusText}`);
+  (err as unknown as { status: number }).status = res.status;
+  throw err;
 }
 
 /**
@@ -1416,89 +894,49 @@ export async function getCustomerStats(): Promise<CustomerStats> {
  * Calls Express GET /api/technician/stats with Authorization: Bearer <getAuthToken()>.
  */
 export async function getTechnicianStats(
-  email?: string
+  _email?: string
 ): Promise<TechnicianStats> {
   const token = await getAuthToken();
-
-  if (token) {
-    const res = await fetch(`${API_URL}/api/technician/stats`, {
-      headers: {
-        Authorization: `Bearer ${token}`,
-      },
-      cache: 'no-store',
-    });
-
-    if (res.ok) {
-      const data = await res.json();
-      return {
-        totalServices: data.totalServices ?? 0,
-        approvedServices: data.approvedServices ?? 0,
-        pendingRequests: data.pendingRequests ?? 0,
-        completedJobs: data.completedJobs ?? 0,
-        totalEarnings: data.totalEarnings ?? 0,
-        chartData: Array.isArray(data.chartData)
-          ? data.chartData
-          : Array.isArray(data.earningsByMonth)
-          ? data.earningsByMonth
-          : [],
-      };
-    }
-
-    const errorData = await res.json().catch(() => ({}));
-    const err = new Error(
-      errorData.message || `Failed to fetch technician stats: ${res.statusText}`
-    );
-    (err as unknown as { status: number }).status = res.status;
-    throw err;
+  if (!token) {
+    return {
+      totalServices: 0,
+      approvedServices: 0,
+      pendingRequests: 0,
+      completedJobs: 0,
+      totalEarnings: 0,
+      chartData: [],
+    };
   }
 
-  await delay();
-  const techServices = email
-    ? inMemoryServices.filter(
-        (s) => s.technicianEmail.toLowerCase() === email.toLowerCase()
-      )
-    : inMemoryServices;
-
-  const techBookings = email
-    ? inMemoryBookings.filter(
-        (b) => b.technicianEmail.toLowerCase() === email.toLowerCase()
-      )
-    : inMemoryBookings;
-
-  const totalServices = techServices.length;
-  const approvedServices = techServices.filter(
-    (s) => s.approvalStatus === 'approved'
-  ).length;
-  const pendingRequests = techBookings.filter(
-    (b) => b.status === 'requested'
-  ).length;
-  const completedJobs = techBookings.filter(
-    (b) => b.status === 'completed'
-  ).length;
-  const totalEarnings = techBookings
-    .filter((b) => b.status === 'completed' && b.paymentStatus === 'paid')
-    .reduce((sum, b) => sum + b.finalAmount, 0);
-
-  const chartData = [
-    { month: 'Oct', jobs: 3, earnings: 340 },
-    { month: 'Nov', jobs: 5, earnings: 580 },
-    { month: 'Dec', jobs: 4, earnings: 490 },
-    { month: 'Jan', jobs: 6, earnings: 720 },
-    {
-      month: 'Feb',
-      jobs: Math.max(2, completedJobs),
-      earnings: Math.max(195, totalEarnings),
+  const res = await fetch(`${API_URL}/api/technician/stats`, {
+    headers: {
+      Authorization: `Bearer ${token}`,
     },
-  ];
+    cache: 'no-store',
+  });
 
-  return {
-    totalServices,
-    approvedServices,
-    pendingRequests,
-    completedJobs,
-    totalEarnings,
-    chartData,
-  };
+  if (res.ok) {
+    const data = await res.json();
+    return {
+      totalServices: data.totalServices ?? 0,
+      approvedServices: data.approvedServices ?? 0,
+      pendingRequests: data.pendingRequests ?? 0,
+      completedJobs: data.completedJobs ?? 0,
+      totalEarnings: data.totalEarnings ?? 0,
+      chartData: Array.isArray(data.chartData)
+        ? data.chartData
+        : Array.isArray(data.earningsByMonth)
+        ? data.earningsByMonth
+        : [],
+    };
+  }
+
+  const errorData = await res.json().catch(() => ({}));
+  const err = new Error(
+    errorData.message || `Failed to fetch technician stats: ${res.statusText}`
+  );
+  (err as unknown as { status: number }).status = res.status;
+  throw err;
 }
 
 /**
@@ -1507,68 +945,48 @@ export async function getTechnicianStats(
  */
 export async function getAdminStats(): Promise<AdminStats> {
   const token = await getAuthToken();
-
-  if (token) {
-    const res = await fetch(`${API_URL}/api/admin/stats`, {
-      headers: {
-        Authorization: `Bearer ${token}`,
-      },
-      cache: 'no-store',
-    });
-
-    if (res.ok) {
-      const data = await res.json();
-      return {
-        totalUsers: data.totalUsers ?? 0,
-        totalTechnicians: data.totalTechnicians ?? data.technicians ?? 0,
-        totalCustomers: data.totalCustomers ?? data.customers ?? 0,
-        pendingServices: data.pendingServices ?? 0,
-        totalBookings: data.totalBookings ?? 0,
-        totalRevenue: data.totalRevenue ?? 0,
-        chartData: Array.isArray(data.chartData)
-          ? data.chartData
-          : Array.isArray(data.revenueByMonth)
-          ? data.revenueByMonth
-          : [],
-      };
-    }
-
-    const errorData = await res.json().catch(() => ({}));
-    const err = new Error(
-      errorData.message || `Failed to fetch admin stats: ${res.statusText}`
-    );
-    (err as unknown as { status: number }).status = res.status;
-    throw err;
+  if (!token) {
+    return {
+      totalUsers: 0,
+      totalTechnicians: 0,
+      totalCustomers: 0,
+      pendingServices: 0,
+      totalBookings: 0,
+      totalRevenue: 0,
+      chartData: [],
+    };
   }
 
-  // Fallback to in-memory if no token
-  await delay();
-  const totalUsers = inMemoryUsers.length;
-  const totalTechnicians = inMemoryUsers.filter((u) => u.role === 'technician').length;
-  const totalCustomers = inMemoryUsers.filter((u) => u.role === 'customer').length;
-  const pendingServices = inMemoryServices.filter(
-    (s) => s.approvalStatus === 'pending'
-  ).length;
-  const totalBookings = inMemoryBookings.length;
-  const totalRevenue = inMemoryPayments.reduce((sum, p) => sum + p.amount, 0);
+  const res = await fetch(`${API_URL}/api/admin/stats`, {
+    headers: {
+      Authorization: `Bearer ${token}`,
+    },
+    cache: 'no-store',
+  });
 
-  const chartData = [
-    { month: 'Oct', revenue: 1450, bookings: 12 },
-    { month: 'Nov', revenue: 2180, bookings: 18 },
-    { month: 'Dec', revenue: 1950, bookings: 16 },
-    { month: 'Jan', revenue: 2890, bookings: 24 },
-    { month: 'Feb', revenue: Math.max(1200, totalRevenue), bookings: Math.max(9, totalBookings) },
-  ];
+  if (res.ok) {
+    const data = await res.json();
+    return {
+      totalUsers: data.totalUsers ?? 0,
+      totalTechnicians: data.totalTechnicians ?? data.technicians ?? 0,
+      totalCustomers: data.totalCustomers ?? data.customers ?? 0,
+      pendingServices: data.pendingServices ?? 0,
+      totalBookings: data.totalBookings ?? 0,
+      totalRevenue: data.totalRevenue ?? 0,
+      chartData: Array.isArray(data.chartData)
+        ? data.chartData
+        : Array.isArray(data.revenueByMonth)
+        ? data.revenueByMonth
+        : [],
+    };
+  }
 
-  return {
-    totalUsers,
-    totalTechnicians,
-    totalCustomers,
-    pendingServices,
-    totalBookings,
-    totalRevenue,
-    chartData,
-  };
+  const errorData = await res.json().catch(() => ({}));
+  const err = new Error(
+    errorData.message || `Failed to fetch admin stats: ${res.statusText}`
+  );
+  (err as unknown as { status: number }).status = res.status;
+  throw err;
 }
 
 /**
@@ -1592,14 +1010,13 @@ export async function getPublicStats(): Promise<PublicStats> {
       };
     }
   } catch (err) {
-    console.warn('Failed to fetch public platform stats, falling back:', err);
+    console.warn('Failed to fetch public platform stats:', err);
   }
 
-  // Fallback to in-memory
   return {
-    totalServices: inMemoryServices.filter((s) => s.approvalStatus === 'approved').length,
-    completedRepairs: 480 + inMemoryBookings.filter((b) => b.status === 'completed').length,
-    expertTechnicians: 35 + inMemoryUsers.filter((u) => u.role === 'technician').length,
+    totalServices: 14,
+    completedRepairs: 485,
+    expertTechnicians: 38,
     happyCustomers: 98,
     satisfactionRate: 99.2,
   };
