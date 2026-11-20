@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect, Suspense } from 'react';
+import React, { useState, useEffect, useRef, Suspense } from 'react';
 import Link from 'next/link';
 import { useSearchParams } from 'next/navigation';
 import {
@@ -15,8 +15,9 @@ import {
   Phone,
   Mail,
   Loader2,
+  AlertCircle,
 } from 'lucide-react';
-import { getPayments } from '@/lib/data';
+import { verifyPaymentSession, getPayments } from '@/lib/data';
 import { Payment } from '@/lib/types';
 import { Button } from '@/components/Button';
 import { Container } from '@/components/Container';
@@ -24,65 +25,91 @@ import { toast } from 'sonner';
 
 function PaymentSuccessContent() {
   const searchParams = useSearchParams();
+  const sessionId = searchParams.get('session_id');
 
   const [payment, setPayment] = useState<Payment | null>(null);
   const [copiedTxn, setCopiedTxn] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
+  const [errorMsg, setErrorMsg] = useState<string | null>(null);
+  const verifiedRef = useRef(false);
 
-  // Load latest payment from mock data or URL params
+  // Load payment details: call GET /api/payments/verify once if session_id is present
   useEffect(() => {
     async function loadPaymentDetails() {
+      if (verifiedRef.current) return;
+      verifiedRef.current = true;
+
       try {
         setIsLoading(true);
-        const paymentsList = await getPayments();
 
-        // Check if query params specify booking or transaction
-        const txnParam = searchParams.get('txn') || searchParams.get('transaction_id');
-        const bookingParam = searchParams.get('booking_id');
+        if (sessionId) {
+          // Real Stripe verification call
+          const res = await verifyPaymentSession(sessionId);
+          if (res?.payment) {
+            setPayment(res.payment);
+          }
+        } else {
+          // Fallback if no session_id parameter
+          const paymentsList = await getPayments();
 
-        let matched: Payment | undefined;
-        if (txnParam) {
-          matched = paymentsList.find((p) => p.transactionId === txnParam);
-        } else if (bookingParam) {
-          matched = paymentsList.find((p) => p.bookingId === bookingParam);
+          const txnParam = searchParams.get('txn') || searchParams.get('transaction_id');
+          const bookingParam = searchParams.get('booking_id');
+
+          let matched: Payment | undefined;
+          if (txnParam) {
+            matched = paymentsList.find((p) => p.transactionId === txnParam);
+          } else if (bookingParam) {
+            matched = paymentsList.find((p) => p.bookingId === bookingParam);
+          }
+
+          if (!matched && paymentsList.length > 0) {
+            matched = paymentsList[0];
+          }
+
+          if (matched) {
+            setPayment(matched);
+          }
         }
-
-        if (!matched && paymentsList.length > 0) {
-          // Default to latest recorded payment
-          matched = paymentsList[0];
-        }
-
-        if (matched) {
-          setPayment(matched);
-        }
-      } catch (err) {
-        console.error('Failed to load payment details:', err);
+      } catch (err: unknown) {
+        console.error('Failed to load or verify payment details:', err);
+        const msg = err instanceof Error ? err.message : 'Unable to verify payment session.';
+        setErrorMsg(msg);
+        toast.error(msg);
       } finally {
         setIsLoading(false);
       }
     }
 
     loadPaymentDetails();
-  }, [searchParams]);
+  }, [sessionId, searchParams]);
 
   // Derived or fallback data
   const paramAmount = searchParams.get('amount');
   const paramTxn = searchParams.get('txn') || searchParams.get('transaction_id');
   const paramService = searchParams.get('service');
 
-  const displayAmount = paramAmount
-    ? Number(paramAmount)
-    : payment?.amount ?? 85.0;
+  const displayAmount = payment?.amount ?? (paramAmount ? Number(paramAmount) : 85.0);
 
-  const displayTxnId = paramTxn
-    ? paramTxn
-    : payment?.transactionId ?? 'TXN-984210-FXM';
+  const displayTxnId = payment?.transactionId ?? paramTxn ?? 'TXN-984210-FXM';
 
-  const displayService = paramService
-    ? paramService
-    : payment?.serviceTitle ?? 'iPhone 13 Pro Max OLED Screen & Battery Replacement';
+  const displayService =
+    payment?.serviceTitle ??
+    paramService ??
+    'iPhone 13 Pro Max OLED Screen & Battery Replacement';
 
   const displayTechName = payment?.technicianName ?? 'Tanvir Ahmed';
+
+  const displayDate = payment?.paidAt
+    ? new Date(payment.paidAt).toLocaleDateString('en-US', {
+        month: 'short',
+        day: 'numeric',
+        year: 'numeric',
+      })
+    : new Date().toLocaleDateString('en-US', {
+        month: 'short',
+        day: 'numeric',
+        year: 'numeric',
+      });
 
   const handleCopyTxn = () => {
     navigator.clipboard.writeText(displayTxnId);
@@ -102,9 +129,36 @@ function PaymentSuccessContent() {
         <div className="flex flex-col items-center gap-3">
           <Loader2 className="h-8 w-8 animate-spin text-teal-700" />
           <p className="text-sm font-medium text-muted-foreground">
-            Verifying escrow clearance...
+            Verifying escrow clearance & payment...
           </p>
         </div>
+      </div>
+    );
+  }
+
+  if (errorMsg && !payment) {
+    return (
+      <div className="py-12 sm:py-16 bg-muted/20 min-h-[85vh] flex items-center">
+        <Container className="max-w-xl">
+          <div className="overflow-hidden rounded-3xl border border-border bg-card p-6 sm:p-10 shadow-xl space-y-6 text-center">
+            <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-full bg-rose-50 text-rose-600 border border-rose-200">
+              <AlertCircle className="h-8 w-8 stroke-[2]" />
+            </div>
+            <h1 className="text-2xl font-bold text-foreground">
+              Verification Notice
+            </h1>
+            <p className="text-sm text-muted-foreground">
+              {errorMsg}
+            </p>
+            <div className="pt-2">
+              <Link href="/dashboard/customer/bookings">
+                <Button className="w-full bg-teal-700 hover:bg-teal-800 text-white font-semibold">
+                  Go to My Bookings
+                </Button>
+              </Link>
+            </div>
+          </div>
+        </Container>
       </div>
     );
   }
