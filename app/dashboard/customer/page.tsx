@@ -10,6 +10,7 @@ import {
   ArrowRight,
   Plus,
 } from 'lucide-react';
+import { useSession } from '@/lib/auth-client';
 import { useMockSession } from '@/lib/mock-session';
 import { getStats, getMyBookings } from '@/lib/data';
 import { CustomerStats, Booking } from '@/lib/types';
@@ -18,9 +19,12 @@ import { CustomerSpendingChart } from '@/components/dashboard/CustomerSpendingCh
 import { StatusBadge } from '@/components/StatusBadge';
 import { PaymentBadge } from '@/components/PaymentBadge';
 import { Button } from '@/components/Button';
+import { toast } from 'sonner';
 
 export default function CustomerDashboardOverview() {
-  const { user } = useMockSession();
+  const { data: session } = useSession();
+  const { user: mockUser } = useMockSession();
+  const user = session?.user || mockUser;
   const [stats, setStats] = useState<CustomerStats | null>(null);
   const [recentBookings, setRecentBookings] = useState<Booking[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -40,8 +44,10 @@ export default function CustomerDashboardOverview() {
           setStats(statsData as CustomerStats);
           setRecentBookings(bookingsData.slice(0, 3));
         }
-      } catch (err) {
+      } catch (err: unknown) {
         console.error('Failed to load customer dashboard data:', err);
+        const msg = err instanceof Error ? err.message : 'Unable to load customer dashboard data.';
+        toast.error(msg);
       } finally {
         if (isMounted) {
           setIsLoading(false);

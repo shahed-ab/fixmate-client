@@ -13,6 +13,7 @@ import {
   Calendar,
   CheckCircle,
 } from 'lucide-react';
+import { useSession } from '@/lib/auth-client';
 import { useMockSession } from '@/lib/mock-session';
 import { getMyBookings, cancelBooking, mockPayBooking } from '@/lib/data';
 import { Booking, BookingStatus } from '@/lib/types';
@@ -27,7 +28,9 @@ type StatusFilter = 'all' | BookingStatus;
 
 export default function MyBookingsPage() {
   const router = useRouter();
-  const { user } = useMockSession();
+  const { data: session } = useSession();
+  const { user: mockUser } = useMockSession();
+  const user = session?.user || mockUser;
   const [bookings, setBookings] = useState<Booking[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
@@ -45,9 +48,10 @@ export default function MyBookingsPage() {
       setIsLoading(true);
       const data = await getMyBookings(user?.email);
       setBookings(data);
-    } catch (err) {
+    } catch (err: unknown) {
       console.error('Failed to fetch bookings:', err);
-      toast.error('Unable to load bookings.');
+      const msg = err instanceof Error ? err.message : 'Unable to load bookings.';
+      toast.error(msg);
     } finally {
       setIsLoading(false);
     }

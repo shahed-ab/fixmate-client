@@ -9,6 +9,7 @@ import {
   Receipt,
   Calendar,
 } from 'lucide-react';
+import { useSession } from '@/lib/auth-client';
 import { useMockSession } from '@/lib/mock-session';
 import { getPayments } from '@/lib/data';
 import { Payment } from '@/lib/types';
@@ -18,7 +19,9 @@ import { StatsCard } from '@/components/StatsCard';
 import { toast } from 'sonner';
 
 export default function CustomerPaymentHistoryPage() {
-  const { user } = useMockSession();
+  const { data: session } = useSession();
+  const { user: mockUser } = useMockSession();
+  const user = session?.user || mockUser;
   const [payments, setPayments] = useState<Payment[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [copiedId, setCopiedId] = useState<string | null>(null);
@@ -33,9 +36,10 @@ export default function CustomerPaymentHistoryPage() {
         if (isMounted) {
           setPayments(data);
         }
-      } catch (err) {
+      } catch (err: unknown) {
         console.error('Failed to load payment history:', err);
-        toast.error('Unable to load payment history.');
+        const msg = err instanceof Error ? err.message : 'Unable to load payment history.';
+        toast.error(msg);
       } finally {
         if (isMounted) {
           setIsLoading(false);
