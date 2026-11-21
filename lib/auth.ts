@@ -69,6 +69,15 @@ function createAuth() {
             };
           },
         },
+        update: {
+          before: async (user) => {
+            // Prevent users from elevating or altering their role via update-user
+            const { role: _role, ...safeData } = user as Record<string, unknown>;
+            return {
+              data: safeData,
+            };
+          },
+        },
       },
     },
     plugins: [jwt()],
