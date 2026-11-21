@@ -67,9 +67,9 @@ function SignUpContent({ initialCallbackUrl }: { initialCallbackUrl?: string }) 
           : role === 'technician'
           ? '/dashboard/technician'
           : '/dashboard/customer');
-      router.replace(destination);
+      window.location.assign(destination);
     }
-  }, [user, role, sessionLoading, callbackUrl, router]);
+  }, [user, role, sessionLoading, callbackUrl]);
 
   const {
     register,
@@ -123,8 +123,7 @@ function SignUpContent({ initialCallbackUrl }: { initialCallbackUrl?: string }) 
           ? '/dashboard/technician'
           : '/dashboard/customer');
 
-      router.push(destination);
-      router.refresh();
+      window.location.assign(destination);
     } catch (err: unknown) {
       const message =
         err instanceof Error ? err.message : 'Could not complete registration.';

@@ -66,9 +66,9 @@ function SignInContent({ initialCallbackUrl }: { initialCallbackUrl?: string }) 
           : role === 'technician'
           ? '/dashboard/technician'
           : '/dashboard/customer');
-      router.replace(destination);
+      window.location.assign(destination);
     }
-  }, [user, role, sessionLoading, callbackUrl, router]);
+  }, [user, role, sessionLoading, callbackUrl]);
 
   const {
     register,
@@ -106,7 +106,10 @@ function SignInContent({ initialCallbackUrl }: { initialCallbackUrl?: string }) 
 
       // Fetch fresh session to know user's role for routing
       const sessionRes = await authClient.getSession();
-      const activeRole = (sessionRes.data?.user as { role?: string } | undefined)?.role || 'customer';
+      const activeRole =
+        (res.data?.user as { role?: string } | undefined)?.role ||
+        (sessionRes.data?.user as { role?: string } | undefined)?.role ||
+        'customer';
 
       const destination =
         callbackUrl ||
@@ -116,8 +119,7 @@ function SignInContent({ initialCallbackUrl }: { initialCallbackUrl?: string }) 
           ? '/dashboard/technician'
           : '/dashboard/customer');
 
-      router.push(destination);
-      router.refresh();
+      window.location.assign(destination);
     } catch (err: unknown) {
       const message =
         err instanceof Error ? err.message : 'Failed to sign in. Please try again.';
