@@ -106,7 +106,7 @@ export const auth: AuthInstance = new Proxy({} as AuthInstance, {
   },
   apply(_target, thisArg, argArray) {
     const instance = getAuth();
-    return Reflect.apply(instance as any, thisArg, argArray);
+    return Reflect.apply(instance as unknown as (...args: unknown[]) => unknown, thisArg, argArray);
   },
   has(_target, prop) {
     const instance = getAuth();

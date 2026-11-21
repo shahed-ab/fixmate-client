@@ -497,10 +497,10 @@ export async function getAdminUsers(): Promise<User[]> {
 
   if (res.ok) {
     const data = await res.json();
-    return (Array.isArray(data) ? data : []).map((u: any) => ({
+    return (Array.isArray(data) ? data : []).map((u: Record<string, unknown>) => ({
       ...u,
       _id: String(u._id || u.id || ''),
-    }));
+    })) as unknown as User[];
   }
 
   const errorData = await res.json().catch(() => ({}));
@@ -573,10 +573,10 @@ export async function getAdminServices(
 
   if (res.ok) {
     const data = await res.json();
-    return (Array.isArray(data) ? data : []).map((s: any) => ({
+    return (Array.isArray(data) ? data : []).map((s: Record<string, unknown>) => ({
       ...s,
       _id: String(s._id || s.id || ''),
-    }));
+    })) as unknown as Service[];
   }
 
   const errorData = await res.json().catch(() => ({}));
@@ -646,10 +646,10 @@ export async function getAdminBookings(statusFilter?: string): Promise<Booking[]
 
   if (res.ok) {
     const data = await res.json();
-    return (Array.isArray(data) ? data : []).map((b: any) => ({
+    return (Array.isArray(data) ? data : []).map((b: Record<string, unknown>) => ({
       ...b,
       _id: String(b._id || b.id || ''),
-    }));
+    })) as unknown as Booking[];
   }
 
   const errorData = await res.json().catch(() => ({}));
@@ -679,12 +679,12 @@ export async function getAdminPayments(): Promise<{ payments: Payment[]; totalRe
 
   if (res.ok) {
     const data = await res.json();
-    const payments = Array.isArray(data.payments)
-      ? data.payments.map((p: any) => ({
+    const payments = (Array.isArray(data.payments)
+      ? data.payments.map((p: Record<string, unknown>) => ({
           ...p,
           _id: String(p._id || p.id || ''),
         }))
-      : [];
+      : []) as unknown as Payment[];
     const totalRevenue = typeof data.totalRevenue === 'number' ? data.totalRevenue : 0;
     return { payments, totalRevenue };
   }
