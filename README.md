@@ -88,7 +88,7 @@ All seeded accounts share the universal password: `Password123!`
    BETTER_AUTH_URL=http://localhost:3000
    MONGODB_URI=your_mongodb_connection_string
    DB_NAME=fixmate
-   NEXT_PUBLIC_IMGBB_API_KEY=your_imgbb_api_key
+   IMGBB_API_KEY=your_imgbb_api_key
    ```
 
 4. **Seed the database (optional):**
