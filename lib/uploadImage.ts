@@ -1,5 +1,5 @@
 /**
- * Reusable image upload utility using ImgBB API per @docs/resource-imgbb.md
+ * Reusable image upload utility using internal server-side /api/upload route
  */
 
 export const ALLOWED_IMAGE_TYPES = [
@@ -9,7 +9,7 @@ export const ALLOWED_IMAGE_TYPES = [
   'image/jpg',
 ];
 
-export const MAX_IMAGE_SIZE_BYTES = 5 * 1024 * 1024; // 5MB
+export const MAX_IMAGE_SIZE_BYTES = 4 * 1024 * 1024; // 4MB limit to stay within Vercel body bounds
 
 export interface ImageValidationResult {
   valid: boolean;
@@ -17,7 +17,7 @@ export interface ImageValidationResult {
 }
 
 /**
- * Validates file type (JPEG, PNG, WebP) and size (<= 5MB)
+ * Validates file type (JPEG, PNG, WebP) and size (<= 4MB)
  */
 export function validateImageFile(file: File): ImageValidationResult {
   if (!file) {
@@ -34,7 +34,7 @@ export function validateImageFile(file: File): ImageValidationResult {
   if (file.size > MAX_IMAGE_SIZE_BYTES) {
     return {
       valid: false,
-      error: 'File size must be less than 5MB.',
+      error: 'File size must be less than 4MB.',
     };
   }
 
@@ -42,9 +42,8 @@ export function validateImageFile(file: File): ImageValidationResult {
 }
 
 /**
- * Uploads an image to ImgBB.
- * If NEXT_PUBLIC_IMGBB_API_KEY is configured, uploads directly to ImgBB.
- * Otherwise, falls back to local data URL for seamless development testing.
+ * Uploads an image via the secure server-side /api/upload route.
+ * Returns the hosted image URL on success.
  */
 export async function uploadImage(imageFile: File): Promise<string> {
   const validation = validateImageFile(imageFile);
@@ -52,42 +51,21 @@ export async function uploadImage(imageFile: File): Promise<string> {
     throw new Error(validation.error || 'Invalid image file.');
   }
 
-  const apiKey = process.env.NEXT_PUBLIC_IMGBB_API_KEY;
+  const formData = new FormData();
+  formData.append('image', imageFile);
 
-  if (apiKey && apiKey.trim() !== '') {
-    const formData = new FormData();
-    formData.append('image', imageFile);
+  const response = await fetch('/api/upload', {
+    method: 'POST',
+    body: formData,
+  });
 
-    const response = await fetch(
-      `https://api.imgbb.com/1/upload?key=${apiKey.trim()}`,
-      {
-        method: 'POST',
-        body: formData,
-      }
-    );
+  const data = await response.json().catch(() => null);
 
-    const data = await response.json();
-
-    if (data.success && data.data?.url) {
-      return data.data.url;
-    }
-
-    throw new Error(
-      data?.error?.message || 'ImgBB upload failed. Please try again.'
-    );
+  if (response.ok && data?.url) {
+    return data.url;
   }
 
-  // Fallback for offline/mock development when API key is not yet set
-  return new Promise((resolve, reject) => {
-    const reader = new FileReader();
-    reader.onload = () => {
-      resolve(reader.result as string);
-    };
-    reader.onerror = () => {
-      reject(new Error('Failed to read image file into preview data.'));
-    };
-    reader.readAsDataURL(imageFile);
-  });
+  throw new Error(data?.error || 'Failed to upload image. Please try again.');
 }
 
 export default uploadImage;
