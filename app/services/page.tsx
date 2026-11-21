@@ -1,5 +1,6 @@
 import React from 'react';
 import Link from 'next/link';
+import { connection } from 'next/server';
 import {
   Wrench,
   SearchX,
@@ -16,6 +17,8 @@ import { ServiceCard } from '@/components/ServiceCard';
 import { FilterBar } from './FilterBar';
 import { Pagination } from './Pagination';
 import { getServices } from '@/lib/data';
+
+export const dynamic = 'force-dynamic';
 
 interface ServicesPageProps {
   searchParams: Promise<{
@@ -34,6 +37,7 @@ export const metadata = {
 };
 
 export default async function ServicesPage({ searchParams }: ServicesPageProps) {
+  await connection();
   const resolvedParams = await searchParams;
 
   const q = resolvedParams.q || undefined;

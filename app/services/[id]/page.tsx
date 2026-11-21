@@ -1,6 +1,9 @@
 import React from 'react';
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
+import { connection } from 'next/server';
+
+export const dynamic = 'force-dynamic';
 import {
   Wrench,
   CheckCircle2,
@@ -38,6 +41,7 @@ export async function generateMetadata({ params }: ServiceDetailsPageProps) {
 export default async function ServiceDetailsPage({
   params,
 }: ServiceDetailsPageProps) {
+  await connection();
   const { id } = await params;
   const service = await getServiceById(id);
 
