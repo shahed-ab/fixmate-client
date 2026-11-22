@@ -61,7 +61,12 @@ function SignInContent({ initialCallbackUrl }: { initialCallbackUrl?: string }) 
   useEffect(() => {
     if (!sessionLoading && user) {
       const destination =
-        callbackUrl ||
+        (callbackUrl &&
+        !callbackUrl.includes('/dashboard/customer') &&
+        !callbackUrl.includes('/dashboard/technician') &&
+        callbackUrl !== '/dashboard'
+          ? callbackUrl
+          : null) ||
         (role === 'admin'
           ? '/dashboard/admin'
           : role === 'technician'
@@ -133,7 +138,12 @@ function SignInContent({ initialCallbackUrl }: { initialCallbackUrl?: string }) 
   const handleGoogleSignIn = async () => {
     try {
       setIsGoogleLoading(true);
-      const callback = callbackUrl || '/dashboard/customer';
+      const callback =
+        callbackUrl &&
+        !callbackUrl.includes('/dashboard/customer') &&
+        !callbackUrl.includes('/dashboard/technician')
+          ? callbackUrl
+          : '/dashboard';
       const res = await authClient.signIn.social({
         provider: 'google',
         callbackURL: callback,

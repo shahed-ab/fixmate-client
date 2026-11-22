@@ -49,6 +49,8 @@ function SignUpContent({ initialCallbackUrl }: { initialCallbackUrl?: string }) 
   const router = useRouter();
   const searchParams = useSearchParams();
   const callbackUrl = initialCallbackUrl || searchParams.get('callbackUrl') || undefined;
+  const roleParam = searchParams.get('role');
+  const defaultRole: 'customer' | 'technician' = roleParam === 'technician' ? 'technician' : 'customer';
 
   const { data: session, isPending: sessionLoading } = useSession();
   const user = session?.user;
@@ -62,7 +64,12 @@ function SignUpContent({ initialCallbackUrl }: { initialCallbackUrl?: string }) 
   useEffect(() => {
     if (!sessionLoading && user) {
       const destination =
-        callbackUrl ||
+        (callbackUrl &&
+        !callbackUrl.includes('/dashboard/customer') &&
+        !callbackUrl.includes('/dashboard/technician') &&
+        callbackUrl !== '/dashboard'
+          ? callbackUrl
+          : null) ||
         (role === 'admin'
           ? '/dashboard/admin'
           : role === 'technician'
@@ -84,10 +91,16 @@ function SignUpContent({ initialCallbackUrl }: { initialCallbackUrl?: string }) 
       name: '',
       email: '',
       password: '',
-      role: 'customer',
+      role: defaultRole,
     },
     mode: 'onChange',
   });
+
+  useEffect(() => {
+    if (roleParam === 'technician' || roleParam === 'customer') {
+      setValue('role', roleParam);
+    }
+  }, [roleParam, setValue]);
 
   const selectedRole = watch('role');
   const watchedPassword = watch('password') || '';
@@ -119,7 +132,12 @@ function SignUpContent({ initialCallbackUrl }: { initialCallbackUrl?: string }) 
       });
 
       const destination =
-        callbackUrl ||
+        (callbackUrl &&
+        !callbackUrl.includes('/dashboard/customer') &&
+        !callbackUrl.includes('/dashboard/technician') &&
+        callbackUrl !== '/dashboard'
+          ? callbackUrl
+          : null) ||
         (data.role === 'technician'
           ? '/dashboard/technician'
           : '/dashboard/customer');
@@ -137,7 +155,23 @@ function SignUpContent({ initialCallbackUrl }: { initialCallbackUrl?: string }) 
   const handleGoogleSignUp = async () => {
     try {
       setIsGoogleLoading(true);
-      const callback = callbackUrl || '/dashboard/customer';
+      const chosenRole = watch('role') || 'customer';
+
+      // Set cookie so backend databaseHooks and server layouts can reliably assign the chosen role
+      if (typeof document !== 'undefined') {
+        document.cookie = `fixmate_signup_role=${encodeURIComponent(
+          chosenRole
+        )}; path=/; max-age=600; SameSite=Lax`;
+      }
+
+      const callback =
+        callbackUrl &&
+        !callbackUrl.includes('/dashboard/customer') &&
+        !callbackUrl.includes('/dashboard/technician') &&
+        callbackUrl !== '/dashboard'
+          ? callbackUrl
+          : `/dashboard/${chosenRole}`;
+
       const res = await authClient.signIn.social({
         provider: 'google',
         callbackURL: callback,

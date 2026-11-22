@@ -1,5 +1,5 @@
 import React from 'react';
-import { headers } from 'next/headers';
+import { cookies, headers } from 'next/headers';
 import { redirect } from 'next/navigation';
 import { auth } from '@/lib/auth';
 import { UserRole } from '@/lib/types';
@@ -11,6 +11,9 @@ export default async function DashboardLayout({
   children: React.ReactNode;
 }) {
   const reqHeaders = await headers();
+  const cookieStore = await cookies();
+  const signupRoleCookie = cookieStore.get('fixmate_signup_role')?.value;
+
   let session = null;
   try {
     session = await auth.api.getSession({
@@ -28,7 +31,32 @@ export default async function DashboardLayout({
     redirect(`/sign-in${callback}`);
   }
 
-  const role = ((session.user as { role?: string }).role || 'customer') as UserRole;
+  let role = ((session.user as { role?: string }).role || 'customer') as UserRole;
+
+  // If newly signed up with Google as technician, sync role into database if still customer
+  let shouldRedirectToTech = false;
+  if (signupRoleCookie === 'technician' && role === 'customer' && session.user.id) {
+    try {
+      const { db } = await import('@/lib/mongodb');
+      const { ObjectId } = await import('mongodb');
+      const userIdQuery = ObjectId.isValid(session.user.id)
+        ? { _id: new ObjectId(session.user.id) }
+        : { id: session.user.id };
+      await db.collection('user').updateOne(
+        { ...userIdQuery, role: 'customer' },
+        { $set: { role: 'technician' } }
+      );
+      cookieStore.delete('fixmate_signup_role');
+      role = 'technician';
+      shouldRedirectToTech = true;
+    } catch (error) {
+      console.error('Error syncing technician role in DashboardLayout:', error);
+    }
+  }
+
+  if (shouldRedirectToTech) {
+    redirect('/dashboard/technician');
+  }
 
   // 2. Server-side role boundaries check: wrong role goes to own dashboard
   if (pathname) {

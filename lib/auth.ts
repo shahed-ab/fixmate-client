@@ -71,9 +71,34 @@ function createAuth() {
     databaseHooks: {
       user: {
         create: {
-          before: async (user) => {
-            const roleStr = typeof user.role === "string" ? user.role : "";
-            const role = roleStr === "technician" ? "technician" : "customer";
+          before: async (user, context) => {
+            let roleFromCookie = "";
+            try {
+              if (
+                context &&
+                typeof (context as unknown as { getCookie?: (k: string) => string | null }).getCookie === "function"
+              ) {
+                roleFromCookie =
+                  (context as unknown as { getCookie: (k: string) => string | null }).getCookie("fixmate_signup_role") || "";
+              }
+              if (!roleFromCookie && context) {
+                const header =
+                  (typeof (context as unknown as { getHeader?: (k: string) => string | null }).getHeader === "function"
+                    ? (context as unknown as { getHeader: (k: string) => string | null }).getHeader("cookie")
+                    : null) ||
+                  (context as unknown as { headers?: Headers })?.headers?.get?.("cookie") ||
+                  "";
+                const match = String(header).match(/fixmate_signup_role=([^;]+)/);
+                if (match) {
+                  roleFromCookie = decodeURIComponent(match[1].trim());
+                }
+              }
+            } catch {
+              // fallback if context is not available
+            }
+
+            const rawRole = (typeof user.role === "string" && user.role) || roleFromCookie;
+            const role = rawRole === "technician" ? "technician" : "customer";
             return {
               data: {
                 ...user,
@@ -89,6 +114,53 @@ function createAuth() {
             return {
               data: safeData,
             };
+          },
+        },
+      },
+      session: {
+        create: {
+          before: async (session, context) => {
+            let roleFromCookie = "";
+            try {
+              if (
+                context &&
+                typeof (context as unknown as { getCookie?: (k: string) => string | null }).getCookie === "function"
+              ) {
+                roleFromCookie =
+                  (context as unknown as { getCookie: (k: string) => string | null }).getCookie("fixmate_signup_role") || "";
+              }
+              if (!roleFromCookie && context) {
+                const header =
+                  (typeof (context as unknown as { getHeader?: (k: string) => string | null }).getHeader === "function"
+                    ? (context as unknown as { getHeader: (k: string) => string | null }).getHeader("cookie")
+                    : null) ||
+                  (context as unknown as { headers?: Headers })?.headers?.get?.("cookie") ||
+                  "";
+                const match = String(header).match(/fixmate_signup_role=([^;]+)/);
+                if (match) {
+                  roleFromCookie = decodeURIComponent(match[1].trim());
+                }
+              }
+            } catch {
+              // fallback
+            }
+
+            if (roleFromCookie === "technician" && session?.userId) {
+              try {
+                const { db } = await import("./mongodb");
+                const { ObjectId } = await import("mongodb");
+                const userIdQuery = ObjectId.isValid(session.userId)
+                  ? { _id: new ObjectId(session.userId) }
+                  : { id: session.userId };
+                await db.collection("user").updateOne(
+                  { ...userIdQuery, role: "customer" },
+                  { $set: { role: "technician" } }
+                );
+              } catch (err) {
+                console.error("Failed to sync signup technician role on session create:", err);
+              }
+            }
+            return { data: session };
           },
         },
       },
