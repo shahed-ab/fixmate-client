@@ -19,6 +19,12 @@ Book verified technicians, track every repair step live, and pay only after the 
 </div>
 
 ---
+<img width="1715" height="963" alt="image" src="https://github.com/user-attachments/assets/40c4e75d-c22f-4dce-b5f9-3e07e2fc901a" />
+<img width="1226" height="918" alt="image" src="https://github.com/user-attachments/assets/208e7487-421b-46d8-8bea-7b513987bcc9" />
+<img width="1203" height="475" alt="image" src="https://github.com/user-attachments/assets/dde5302e-9f83-4056-9951-84eadaed0046" />
+
+
+
 
 ## 📌 Table of Contents
 
@@ -303,8 +309,8 @@ Deployed on **Vercel**.
 ## 👨‍💻 Author
 
 **Your Name**
-- GitHub: [USERNAME](https://github.com/shahed-ab)
-- LinkedIn: [linkedin](https://www.linkedin.com/in/abushahed/)
+- GitHub: [](https://github.com/shahed-ab)
+- LinkedIn: [](https://www.linkedin.com/in/abushahed/)
 ---
 
 <div align="center">
