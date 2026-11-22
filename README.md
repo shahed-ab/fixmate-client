@@ -89,6 +89,8 @@ All seeded accounts share the universal password: `Password123!`
    MONGODB_URI=your_mongodb_connection_string
    DB_NAME=fixmate
    IMGBB_API_KEY=your_imgbb_api_key
+   GOOGLE_CLIENT_ID=your_google_client_id
+   GOOGLE_CLIENT_SECRET=your_google_client_secret
    ```
 
 4. **Seed the database (optional):**
