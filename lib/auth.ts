@@ -19,6 +19,9 @@ function createAuth() {
     ])
   );
 
+  const googleClientId = (process.env.GOOGLE_CLIENT_ID || "").trim();
+  const googleClientSecret = (process.env.GOOGLE_CLIENT_SECRET || "").trim();
+
   return betterAuth({
     database: mongodbAdapter(db, { client }),
     secret: process.env.BETTER_AUTH_SECRET,
@@ -28,11 +31,11 @@ function createAuth() {
       enabled: true,
     },
     socialProviders: {
-      ...(process.env.GOOGLE_CLIENT_ID && process.env.GOOGLE_CLIENT_SECRET
+      ...(googleClientId && googleClientSecret
         ? {
             google: {
-              clientId: process.env.GOOGLE_CLIENT_ID,
-              clientSecret: process.env.GOOGLE_CLIENT_SECRET,
+              clientId: googleClientId,
+              clientSecret: googleClientSecret,
             },
           }
         : {}),

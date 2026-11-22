@@ -138,10 +138,23 @@ function SignUpContent({ initialCallbackUrl }: { initialCallbackUrl?: string }) 
     try {
       setIsGoogleLoading(true);
       const callback = callbackUrl || '/dashboard/customer';
-      await authClient.signIn.social({
+      const res = await authClient.signIn.social({
         provider: 'google',
         callbackURL: callback,
       });
+
+      if (res?.error) {
+        const errorMsg =
+          res.error.message ||
+          'Google authentication is not configured yet. Make sure GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET are added to your environment variables.';
+        toast.error(errorMsg);
+        setIsGoogleLoading(false);
+        return;
+      }
+
+      if (res?.data?.url) {
+        window.location.href = res.data.url;
+      }
     } catch (err: unknown) {
       const message =
         err instanceof Error ? err.message : 'Google sign up failed.';
