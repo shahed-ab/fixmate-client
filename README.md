@@ -302,7 +302,7 @@ Deployed on **Vercel**.
 
 ## 🔗 Related Repository
 
-**⚙️ FixMate Server (Express + MongoDB + Stripe):** https://github.com/YOUR_USERNAME/fixmate-server
+**⚙️ FixMate Server (Express + MongoDB + Stripe):** https://github.com/shahed-ab/fixmate-server
 
 ---
 
